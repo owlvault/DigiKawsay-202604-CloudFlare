@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  # 1. Base de Datos (PostgreSQL) para Checkpointer y Estado
+  postgres:
+    image: postgres:15-alpine
+    container_name: digikawsay-postgres
+    environment:
+      POSTGRES_USER: digikawsay_app
+      POSTGRES_PASSWORD: local_password_123
+      POSTGRES_DB: digikawsay
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./infra/db_init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U digikawsay_app"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Weaviate (Base de Datos Vectorial)
+  weaviate:
+    image: semitechnologies/weaviate:1.24.4
+    container_name: digikawsay-weaviate
+    ports:
+      - "8081:8080"
+      - "50051:50051"
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      DEFAULT_VECTORIZER_MODULE: 'text2vec-palm'
+      ENABLE_MODULES: 'text2vec-palm'
+      CLUSTER_HOSTNAME: 'node1'
+
+  # 3. Emulador de Google Cloud Pub/Sub
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/cloud-sdk:emulators
+    container_name: digikawsay-pubsub
+    ports:
+      - "8085:8085"
+    command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
+
+  # 4. Inicializador de Pub/Sub Topics
+  pubsub-init:
+    image: gcr.io/google.com/cloudsdktool/cloud-sdk:latest
+    container_name: digikawsay-pubsub-init
+    depends_on:
+      - pubsub-emulator
+    environment:
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+    volumes:
+      - ./infra/pubsub_init.sh:/scripts/pubsub_init.sh
+    entrypoint: [ "bash", "-c", "sleep 10 && bash /scripts/pubsub_init.sh my-local-project" ]
+
+  # -- Microservicios de DigiKawsay -- 
+  # (Requieren construir una imagen base de python, usar 'python:3.11-slim' en producción.
+  # Para este entorno local simulamos la ejecución de los workers asincronos montando el código)
+
+  channel-layer:
+    image: python:3.11-slim
+    container_name: digikawsay-channel
+    depends_on:
+      - pubsub-emulator
+    ports:
+      - "8001:8080"
+    environment:
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+      GCP_PROJECT_ID: my-local-project
+      PUBSUB_INBOUND_TOPIC: iap.channel.inbound
+      TELEGRAM_BOT_TOKEN: $TELEGRAM_BOT_TOKEN
+    volumes:
+      - ./src/channel-layer:/app
+    working_dir: /app
+    command: >
+      bash -c "pip install fastapi uvicorn google-cloud-pubsub && uvicorn main:app --host 0.0.0.0 --port 8080"
+
+  preprocessor:
+    image: python:3.11-slim
+    container_name: digikawsay-preprocessor
+    depends_on:
+      - pubsub-init
+      - weaviate
+    environment:
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+      GCP_PROJECT_ID: my-local-project
+      WEAVIATE_URL: http://weaviate:8080
+    volumes:
+      - ./src/preprocessor:/app
+    working_dir: /app
+    command: >
+      bash -c "pip install google-cloud-pubsub && python main.py"
+
+  val-service:
+    image: python:3.11-slim
+    container_name: digikawsay-val
+    depends_on:
+      - pubsub-init
+      - postgres
+    environment:
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+      GCP_PROJECT_ID: my-local-project
+      GEMINI_API_KEY: $GEMINI_API_KEY
+      DATABASE_URL: postgres://digikawsay_app:local_password_123@postgres:5432/digikawsay
+    volumes:
+      - ./src/val-service:/app
+    working_dir: /app
+    command: >
+      bash -c "pip install google-cloud-pubsub langchain-google-genai langgraph psycopg2-binary && python main.py"
+
+  agente00-service:
+    image: python:3.11-slim
+    container_name: digikawsay-agente00
+    depends_on:
+      - pubsub-init
+      - postgres
+    ports:
+      - "8002:8000"
+    environment:
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+      GCP_PROJECT_ID: my-local-project
+      DATABASE_URL: postgres://digikawsay_app:local_password_123@postgres:5432/digikawsay
+    volumes:
+      - ./src/agente00-service:/app
+    working_dir: /app
+    command: >
+      bash -c "pip install fastapi uvicorn pydantic psycopg2-binary && uvicorn main:app --host 0.0.0.0 --port 8000"
+
+volumes:
+  pgdata:

@@ -1,0 +1,17 @@
+# MVP DigiKawsay Dependencies
+# Channel Layer & Agente00
+fastapi>=0.111.0
+uvicorn>=0.30.1
+pydantic>=2.7.4
+
+# LangGraph & VAL Service
+langchain-core>=0.2.9
+langchain-google-genai>=1.0.6
+langgraph>=0.0.69
+
+# GCP / PubSub
+google-cloud-pubsub>=2.21.3
+
+# Persistencia
+psycopg2-binary>=2.9.9
+weaviate-client>=4.6.4

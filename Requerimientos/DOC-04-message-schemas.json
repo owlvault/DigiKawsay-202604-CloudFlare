@@ -1,0 +1,488 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "document_id": "DOC-04",
+  "title": "ADD-IAP-MAS v3.0 — Message Schema Pack",
+  "version": "3.0.0",
+  "status": "READY_FOR_FACTORY_REVIEW",
+  "decisions_locked": {
+    "D1_auth": "OAuth_SSO_Google_Microsoft — participant_id = OAuth sub claim",
+    "D2_channel": "API_agnostica + MVP_Telegram_webhook",
+    "D3_transparency": "total — consentimiento explícito pre-onboarding",
+    "D4_sla": "async_soft_lt_2min — pipeline batch, no streaming"
+  },
+
+  "schemas": {
+
+    "AUTH_SESSION": {
+      "$id": "#AUTH_SESSION",
+      "description": "Token de sesión emitido por el Auth Service tras OAuth/SSO. Presente en cada request a VAL.",
+      "type": "object",
+      "required": ["session_token", "participant_id", "oauth_provider", "project_id", "consent_granted", "issued_at", "expires_at"],
+      "properties": {
+        "session_token":     { "type": "string", "description": "JWT firmado por Auth Service (HS256, secret en Vault)" },
+        "participant_id":    { "type": "string", "description": "= OAuth sub claim. Inmutable. Clave primaria en todo el sistema." },
+        "oauth_provider":    { "type": "string", "enum": ["google", "microsoft"] },
+        "oauth_email":       { "type": "string", "format": "email", "description": "Almacenado solo en Auth Service; nunca viaja al enjambre" },
+        "project_id":        { "type": "string", "description": "Proyecto IAP activo para este participante" },
+        "consent_granted":   { "type": "boolean", "description": "MUST be true antes de primer turno con VAL. Bloqueante." },
+        "consent_timestamp": { "type": "string", "format": "date-time" },
+        "issued_at":         { "type": "string", "format": "date-time" },
+        "expires_at":        { "type": "string", "format": "date-time" },
+        "channel":           { "type": "string", "enum": ["telegram", "web", "api"], "description": "Canal de entrada de este participante" },
+        "channel_user_id":   { "type": "string", "description": "ID del usuario en el canal (ej: Telegram chat_id). Solo en Channel Layer; no viaja al enjambre." }
+      }
+    },
+
+    "CHANNEL_INBOUND_MESSAGE": {
+      "$id": "#CHANNEL_INBOUND_MESSAGE",
+      "description": "Mensaje normalizado que el Channel Abstraction Layer entrega a VAL desde cualquier canal (Telegram MVP, web, etc.)",
+      "type": "object",
+      "required": ["message_id", "participant_id", "project_id", "channel", "modality", "payload", "received_at"],
+      "properties": {
+        "message_id":     { "type": "string", "format": "uuid" },
+        "participant_id": { "type": "string", "description": "OAuth sub claim" },
+        "project_id":     { "type": "string" },
+        "channel":        { "type": "string", "enum": ["telegram", "web", "api"] },
+        "modality":       { "type": "string", "enum": ["text", "voice", "document", "image"] },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "text":              { "type": "string", "description": "Texto del mensaje o transcripción de audio" },
+            "raw_audio_gcs_uri": { "type": "string", "description": "GCS URI del audio original antes de transcripción. Solo si modality=voice" },
+            "document_gcs_uri":  { "type": "string", "description": "GCS URI del documento. Solo si modality=document" },
+            "transcript_timestamps": {
+              "type": "array",
+              "description": "Solo si modality=voice. Output de Gemini Audio API.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "start_ms": { "type": "integer" },
+                  "end_ms":   { "type": "integer" },
+                  "text":     { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "received_at":   { "type": "string", "format": "date-time" },
+        "channel_meta":  {
+          "type": "object",
+          "description": "Metadatos específicos del canal. Opacos para el enjambre.",
+          "properties": {
+            "telegram_update_id": { "type": "integer" },
+            "telegram_chat_id":   { "type": "integer" },
+            "telegram_message_id":{ "type": "integer" }
+          }
+        }
+      }
+    },
+
+    "CHANNEL_OUTBOUND_MESSAGE": {
+      "$id": "#CHANNEL_OUTBOUND_MESSAGE",
+      "description": "Respuesta de VAL hacia el participante. El Channel Layer la traduce al formato del canal.",
+      "type": "object",
+      "required": ["message_id", "participant_id", "project_id", "channel", "text", "created_at"],
+      "properties": {
+        "message_id":        { "type": "string", "format": "uuid" },
+        "in_reply_to":       { "type": "string", "format": "uuid", "description": "message_id del CHANNEL_INBOUND_MESSAGE que origina esta respuesta" },
+        "participant_id":    { "type": "string" },
+        "project_id":        { "type": "string" },
+        "channel":           { "type": "string", "enum": ["telegram", "web", "api"] },
+        "text":              { "type": "string", "description": "Texto de respuesta de VAL. Max 2000 chars para Telegram MVP." },
+        "created_at":        { "type": "string", "format": "date-time" },
+        "latency_ms":        { "type": "integer", "description": "Tiempo desde received_at hasta created_at. SLA target < 120000 ms" },
+        "sla_breached":      { "type": "boolean", "description": "true si latency_ms > 120000" }
+      }
+    },
+
+    "DIALOGUE_STATE": {
+      "$id": "#DIALOGUE_STATE",
+      "description": "Estado persistente de la conversación de un participante. Administrado por VAL, almacenado en LangGraph checkpoint (PostgreSQL).",
+      "type": "object",
+      "required": ["participant_id", "project_id", "cycle_id", "turn_count", "emotional_register", "momentum_score", "topics_covered", "topics_pending"],
+      "properties": {
+        "participant_id":      { "type": "string" },
+        "project_id":          { "type": "string" },
+        "cycle_id":            { "type": "integer", "description": "Ciclo IAP activo (empieza en 1)" },
+        "checkpoint_id":       { "type": "string", "description": "LangGraph checkpoint ID. Permite replay y auditoria." },
+        "turn_count":          { "type": "integer", "minimum": 0 },
+        "emotional_register":  { "type": "string", "enum": ["OPEN", "GUARDED", "RESISTANT", "DISTRESSED"] },
+        "momentum_score":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "topics_covered":      { "type": "array", "items": { "type": "string" } },
+        "topics_pending":      { "type": "array", "items": { "type": "string" } },
+        "saturation_flags":    { "type": "array", "items": { "type": "string" }, "description": "Temas que alcanzaron saturación con este participante" },
+        "active_directive_id": { "type": ["string", "null"], "description": "ID de la Conversation Directive actualmente en buffer" },
+        "deferred_directives": { "type": "array", "items": { "type": "string" }, "description": "directive_ids en el buffer pendientes de aplicar" },
+        "safe_harbor_active":  { "type": "boolean", "default": false },
+        "last_turn_at":        { "type": "string", "format": "date-time" },
+        "speech_act_history":  {
+          "type": "array",
+          "description": "Clasificación de los últimos N turnos por Acto de Habla (Dunham/Searle)",
+          "items": {
+            "type": "object",
+            "properties": {
+              "turn_id":        { "type": "integer" },
+              "speech_act_type":{ "type": "string", "enum": ["ASSERTION", "DECLARATION", "REQUEST", "OFFER", "JUDGMENT"] },
+              "commitment_status": { "type": "string", "enum": ["OPEN", "ACCEPTED", "DECLINED", "BROKEN", "FULFILLED"] }
+            }
+          }
+        }
+      }
+    },
+
+    "DIALOGUE_PACKET": {
+      "$id": "#DIALOGUE_PACKET",
+      "description": "Output de VAL hacia AGENTE-00 tras cada turno. Es el corpus que alimenta al enjambre analítico.",
+      "type": "object",
+      "required": ["packet_id", "turn_id", "participant_id", "project_id", "cycle_id", "raw_transcript", "val_response", "emotional_register", "momentum_score", "directive_status", "created_at"],
+      "properties": {
+        "packet_id":          { "type": "string", "format": "uuid" },
+        "turn_id":            { "type": "integer" },
+        "participant_id":     { "type": "string", "description": "OAuth sub claim" },
+        "project_id":         { "type": "string" },
+        "cycle_id":           { "type": "integer" },
+        "session_id":         { "type": "string", "format": "uuid" },
+
+        "raw_transcript":     { "type": "string", "description": "Texto del participante en este turno (post-transcripción si era audio)" },
+        "val_response":       { "type": "string", "description": "Texto exacto que VAL envió al participante" },
+
+        "emotional_register": { "type": "string", "enum": ["OPEN", "GUARDED", "RESISTANT", "DISTRESSED"] },
+        "momentum_score":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+
+        "speech_act_type":    {
+          "type": "string",
+          "enum": ["ASSERTION", "DECLARATION", "REQUEST", "OFFER", "JUDGMENT"],
+          "description": "Clasificación del turno del participante según Dunham/Searle. Requerido por AG-OKR para construir red de compromisos."
+        },
+        "commitment_detected": {
+          "type": ["object", "null"],
+          "description": "Si el turno contiene un compromiso, lo registra.",
+          "properties": {
+            "type":       { "type": "string", "enum": ["REQUEST", "OFFER", "PROMISE"] },
+            "content":    { "type": "string" },
+            "conditions_of_satisfaction": { "type": "string" },
+            "status":     { "type": "string", "enum": ["OPEN", "ACCEPTED", "DECLINED"] }
+          }
+        },
+
+        "emerging_topics":    { "type": "array", "items": { "type": "string" }, "description": "Temas que el participante introdujo espontáneamente sin directiva" },
+        "saturation_flags":   { "type": "array", "items": { "type": "string" }, "description": "Temas que VAL marca como saturados en este turno" },
+
+        "directive_status":   { "type": "string", "enum": ["APPLIED", "DEFERRED", "PARTIAL", "NONE"] },
+        "directive_id_ref":   { "type": ["string", "null"], "description": "ID de la Conversation Directive aplicada en este turno" },
+
+        "coaching_notes":     { "type": "string", "description": "Observaciones OSAR internas de VAL. NUNCA se muestran al participante ni a otros agentes fuera de AGENTE-00." },
+
+        "pii_anonymized":     { "type": "boolean", "default": true, "description": "Confirmación de que el PII_Anonymizer procesó el raw_transcript antes de este packet" },
+
+        "alerts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "alert_type": { "type": "string", "enum": ["SAFE_HARBOR", "DIRECTIVE_OVERFLOW", "DIALOGUE_SATURATION", "PARTICIPANT_RESISTANCE_DETECTED"] },
+              "detail":     { "type": "string" }
+            }
+          }
+        },
+
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+
+    "CONVERSATION_DIRECTIVE": {
+      "$id": "#CONVERSATION_DIRECTIVE",
+      "description": "Instrucción de AGENTE-00 hacia VAL sobre cómo dirigir la conversación. VAL la integra como intención, nunca como script.",
+      "type": "object",
+      "required": ["directive_id", "project_id", "cycle_id", "directive_type", "urgency", "next_topic", "created_at"],
+      "properties": {
+        "directive_id":   { "type": "string", "format": "uuid" },
+        "project_id":     { "type": "string" },
+        "cycle_id":       { "type": "integer" },
+        "created_at":     { "type": "string", "format": "date-time" },
+        "expires_at":     { "type": "string", "format": "date-time", "description": "Si VAL no aplica la directiva antes de esta fecha, se descarta automáticamente" },
+
+        "directive_type": {
+          "type": "string",
+          "enum": ["INDIVIDUAL", "COLLECTIVE", "DIFFERENTIAL"],
+          "description": "INDIVIDUAL: profundizar con un participante específico. COLLECTIVE: explorar tema con todos. DIFFERENTIAL: contrastar visiones entre dos participantes."
+        },
+        "target_participant_id": {
+          "type": ["string", "null"],
+          "description": "Required si directive_type = INDIVIDUAL. OAuth sub claim del participante objetivo."
+        },
+        "target_participants_pair": {
+          "type": ["array", "null"],
+          "items": { "type": "string" },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Required si directive_type = DIFFERENTIAL. Par de participant_ids a contrastar."
+        },
+
+        "urgency":      { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+        "next_topic":   { "type": "string", "description": "Constructo que el enjambre necesita explorar o validar" },
+        "probing_angle":{ "type": "string", "description": "Perspectiva o marco desde el cual abordar el next_topic" },
+        "tension_to_surface": { "type": ["string", "null"], "description": "Tensión analítica del enjambre que necesita validación conversacional" },
+
+        "question_suggestions": {
+          "type": "array",
+          "maxItems": 3,
+          "items": { "type": "string" },
+          "description": "Preguntas sugeridas por los agentes analíticos. VAL puede reformularlas libremente. No son scripts."
+        },
+        "avoid_topics": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Temas que VAL debe evitar (generaron SAFE_HARBOR o saturaron)"
+        },
+        "emotional_target": {
+          "type": "string",
+          "enum": ["OPEN", "GUARDED"],
+          "description": "Estado emocional deseado del participante al cerrar el turno donde se aplica la directiva"
+        },
+        "source_agent_id": { "type": "string", "description": "Agente del enjambre que originó la directiva (ej: AG-05, AG-08)" },
+        "evidence_ref":    { "type": ["string", "null"], "description": "chunk_id en Vector DB que motivó esta directiva" }
+      }
+    },
+
+    "TASK_ENVELOPE": {
+      "$id": "#TASK_ENVELOPE",
+      "description": "Mensaje de AGENTE-00 hacia cualquier agente especialista del enjambre. Viaja por Pub/Sub.",
+      "type": "object",
+      "required": ["envelope_id", "project_id", "cycle_id", "iap_phase", "sender_id", "receiver_id", "task_type", "payload", "created_at"],
+      "properties": {
+        "envelope_id":  { "type": "string", "format": "uuid" },
+        "project_id":   { "type": "string" },
+        "cycle_id":     { "type": "integer" },
+        "iap_phase":    { "type": "string", "enum": ["INVESTIGACION", "ACCION", "PARTICIPACION"] },
+        "created_at":   { "type": "string", "format": "date-time" },
+        "ttl_seconds":  { "type": "integer", "default": 300 },
+        "requires_ack": { "type": "boolean", "default": true },
+
+        "sender_id":    { "type": "string", "description": "Siempre AGENTE-00" },
+        "receiver_id":  { "type": "string", "description": "agent_id del agente destinatario del enjambre" },
+
+        "task_type": {
+          "type": "string",
+          "enum": ["ANALYZE", "SYNTHESIZE", "VALIDATE", "GENERATE", "CROSS_ANALYZE"],
+          "description": "CROSS_ANALYZE: nuevo en v3.0. Indica que el corpus contiene datos de múltiples participantes para análisis diferencial."
+        },
+
+        "payload": {
+          "type": "object",
+          "required": ["instruction", "corpus_refs", "output_schema_ref"],
+          "properties": {
+            "instruction":       { "type": "string", "description": "Instrucción específica para el agente receptor" },
+            "corpus_refs":       {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "chunk_ids en Vector DB que el agente debe recuperar. El agente hace RAG con estos IDs."
+            },
+            "corpus_scope": {
+              "type": "string",
+              "enum": ["ALL_PARTICIPANTS", "SINGLE_PARTICIPANT", "PARTICIPANT_PAIR"],
+              "description": "Alcance del corpus. PARTICIPANT_PAIR solo aplica cuando task_type=CROSS_ANALYZE."
+            },
+            "participant_filter": {
+              "type": ["array", "null"],
+              "items": { "type": "string" },
+              "description": "Lista de participant_ids a incluir en el análisis. null = todos los participantes del proyecto."
+            },
+            "output_schema_ref": { "type": "string", "description": "Referencia al schema de output esperado (nombre del schema en este documento)" },
+            "constraints": {
+              "type": "array",
+              "items": { "type": "string", "enum": ["NO_HALLUCINATION", "EVIDENCE_REQUIRED", "DECLARE_INSUFFICIENCY", "MEMBER_CHECKING_REQUIRED"] }
+            },
+            "context_from_seed": { "type": "string", "description": "Fragmento relevante del Seed Prompt como ancla de relevancia" }
+          }
+        },
+
+        "priority": { "type": "string", "enum": ["HIGH", "NORMAL", "LOW"], "default": "NORMAL" }
+      }
+    },
+
+    "AGENT_OUTPUT": {
+      "$id": "#AGENT_OUTPUT",
+      "description": "Schema base de output de cualquier agente especialista hacia AGENTE-00. Cada agente extiende este schema con sus campos propios.",
+      "type": "object",
+      "required": ["output_id", "agent_id", "envelope_id_ref", "project_id", "cycle_id", "status", "created_at"],
+      "properties": {
+        "output_id":       { "type": "string", "format": "uuid" },
+        "agent_id":        { "type": "string" },
+        "envelope_id_ref": { "type": "string", "format": "uuid", "description": "ID del Task Envelope que originó este output" },
+        "project_id":      { "type": "string" },
+        "cycle_id":        { "type": "integer" },
+        "created_at":      { "type": "string", "format": "date-time" },
+        "processing_ms":   { "type": "integer" },
+
+        "status": {
+          "type": "string",
+          "enum": ["OK", "PARTIAL", "INSUFICIENCIA_DE_DATOS", "ERROR"],
+          "description": "INSUFICIENCIA_DE_DATOS: el agente no tiene evidencia suficiente. AGENTE-00 lo registra en data_gaps y no fuerza conclusión."
+        },
+        "insufficiency_detail": {
+          "type": ["object", "null"],
+          "description": "Required si status = INSUFICIENCIA_DE_DATOS",
+          "properties": {
+            "constructo":       { "type": "string" },
+            "razon":            { "type": "string" },
+            "datos_requeridos": { "type": "string" },
+            "ciclos_pendiente": { "type": "integer", "description": "Cuántos ciclos lleva esta brecha sin resolverse" }
+          }
+        },
+
+        "findings": {
+          "type": "array",
+          "description": "Hallazgos del agente. Cada hallazgo lleva su tipo de inferencia y evidencia.",
+          "items": {
+            "type": "object",
+            "required": ["finding_id", "statement", "inference_type", "confidence_level", "evidence"],
+            "properties": {
+              "finding_id":      { "type": "string", "format": "uuid" },
+              "statement":       { "type": "string" },
+              "inference_type":  { "type": "string", "enum": ["OBSERVATION", "INFERENCE_1", "INFERENCE_2", "HYPOTHESIS"] },
+              "confidence_level":{ "type": "string", "enum": ["ALTO", "MEDIO", "EMERGENTE", "INSUFICIENTE"] },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "chunk_id":       { "type": "string", "description": "ID en Vector DB" },
+                    "participant_id": { "type": "string" },
+                    "cita_textual":   { "type": "string", "description": "Fragmento textual del corpus. Max 300 chars." },
+                    "session_ref":    { "type": "string" }
+                  }
+                },
+                "minItems": 1,
+                "description": "Un hallazgo sin evidencia es rechazado por AGENTE-00."
+              },
+              "requires_member_checking": { "type": "boolean" },
+              "generative_question":      { "type": ["string", "null"], "description": "Pregunta para devolver al equipo participante" }
+            }
+          }
+        },
+
+        "agent_specific_payload": {
+          "type": "object",
+          "description": "Payload extendido específico de cada agente. Ver schemas AG-01..AG-09 en DOC-03."
+        },
+
+        "vector_db_written": { "type": "boolean", "description": "true si el agente persistió su output al Vector DB namespace del ciclo" }
+      }
+    },
+
+    "AGENT_REGISTRY_ENTRY": {
+      "$id": "#AGENT_REGISTRY_ENTRY",
+      "description": "Registro de un agente en el Agent Registry. AGENTE-00 consulta este schema para capability-based routing.",
+      "type": "object",
+      "required": ["agent_id", "capabilities", "project_tags", "input_schema_ref", "output_schema_ref", "pubsub_topic", "health_endpoint", "version", "active"],
+      "properties": {
+        "agent_id":          { "type": "string", "description": "Único e inmutable. Ej: AG-01, AG-10" },
+        "display_name":      { "type": "string" },
+        "capabilities":      { "type": "array", "items": { "type": "string" }, "minItems": 1, "description": "Tags que AGENTE-00 usa para routing. Ej: ['culture_diagnosis','ocai']" },
+        "project_tags":      { "type": "array", "items": { "type": "string" }, "description": "Tipos de proyecto donde aplica. Ej: ['IAP','OKR','wellbeing']" },
+        "input_schema_ref":  { "type": "string", "description": "Ref al schema de TASK_ENVELOPE.payload esperado" },
+        "output_schema_ref": { "type": "string", "description": "Ref al schema de AGENT_OUTPUT.agent_specific_payload" },
+        "pubsub_topic":      { "type": "string", "description": "Topic de Pub/Sub al que se suscribe. Ej: iap.swarm.ag01" },
+        "health_endpoint":   { "type": "string", "format": "uri", "description": "AGENTE-00 hace GET antes de despachar. Espera HTTP 200." },
+        "version":           { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "added_by":          { "type": "string", "description": "Quién incorporó este agente al registro" },
+        "added_at":          { "type": "string", "format": "date-time" },
+        "active":            { "type": "boolean", "description": "false = desactivado sin remover del registro. AGENTE-00 lo omite en routing." },
+        "runtime_config": {
+          "type": "object",
+          "properties": {
+            "model":             { "type": "string", "default": "gemini-1.5-pro-latest" },
+            "temperature":       { "type": "number", "minimum": 0, "maximum": 1 },
+            "max_output_tokens": { "type": "integer", "default": 8192 },
+            "top_p":             { "type": "number", "default": 0.95 }
+          }
+        }
+      }
+    },
+
+    "CYCLE_STATE": {
+      "$id": "#CYCLE_STATE",
+      "description": "Estado global del ciclo IAP. Almacenado en PostgreSQL. AGENTE-00 lee y escribe en cada transición de fase.",
+      "type": "object",
+      "required": ["cycle_id", "project_id", "phase", "started_at"],
+      "properties": {
+        "cycle_id":             { "type": "integer" },
+        "project_id":           { "type": "string" },
+        "phase":                { "type": "string", "enum": ["INVESTIGACION", "ACCION", "PARTICIPACION", "CLOSED"] },
+        "started_at":           { "type": "string", "format": "date-time" },
+        "closed_at":            { "type": ["string", "null"], "format": "date-time" },
+        "n_participants_active":{ "type": "integer" },
+        "n_dialogue_packets":   { "type": "integer" },
+        "saturation_reached":   { "type": "boolean" },
+        "saturation_index":     { "type": "number", "description": "0.0-1.0. Calculado por AG-05. Umbral de cierre de ciclo: > 0.85" },
+        "consensus_reached":    { "type": "boolean" },
+        "data_gaps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "gap_id":      { "type": "string", "format": "uuid" },
+              "constructo":  { "type": "string" },
+              "agent_id":    { "type": "string" },
+              "cycles_open": { "type": "integer", "description": "Si >= 2: DEAD_END_ALERT al Diseñador de Investigación" },
+              "status":      { "type": "string", "enum": ["OPEN", "RESOLVED", "DEAD_END"] }
+            }
+          }
+        },
+        "active_agents": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "agent_ids activados para este ciclo por capability-based routing"
+        },
+        "coverage_matrix": {
+          "type": "object",
+          "description": "{ participant_id: { topic_id: 'COVERED' | 'PENDING' | 'SATURATED' } }. VAL lo construye al cerrar el ciclo.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": { "type": "string", "enum": ["COVERED", "PENDING", "SATURATED"] }
+          }
+        }
+      }
+    }
+
+  },
+
+  "pubsub_topics": {
+    "description": "Topics de Google Cloud Pub/Sub del sistema. Naming: iap.{layer}.{identifier}",
+    "topics": {
+      "iap.seed.input":          "Seed Prompt del Diseñador → AGENTE-00",
+      "iap.channel.inbound":     "Mensajes normalizados del Channel Layer → VAL",
+      "iap.channel.outbound":    "Respuestas de VAL → Channel Layer → Participante",
+      "iap.val.packet":          "Dialogue Packets de VAL → AGENTE-00",
+      "iap.orchestrator.directive": "Conversation Directives de AGENTE-00 → VAL",
+      "iap.swarm.ag01":          "Task Envelopes de AGENTE-00 → AG-01",
+      "iap.swarm.ag02":          "Task Envelopes de AGENTE-00 → AG-02",
+      "iap.swarm.ag03":          "Task Envelopes de AGENTE-00 → AG-03",
+      "iap.swarm.ag04":          "Task Envelopes de AGENTE-00 → AG-04",
+      "iap.swarm.ag05":          "Task Envelopes de AGENTE-00 → AG-05",
+      "iap.swarm.ag06":          "Task Envelopes de AGENTE-00 → AG-06",
+      "iap.swarm.ag07":          "Task Envelopes de AGENTE-00 → AG-07",
+      "iap.swarm.ag08":          "Task Envelopes de AGENTE-00 → AG-08",
+      "iap.swarm.ag09":          "Task Envelopes de AGENTE-00 → AG-09",
+      "iap.swarm.ext":           "Task Envelopes hacia agentes extensibles (AG-10+). El agent_id va en el mensaje.",
+      "iap.swarm.output":        "Agent Outputs de cualquier agente → AGENTE-00",
+      "iap.orchestrator.report": "Informe de Ciclo IAP de AGENTE-00 → Diseñador / Project Leader",
+      "iap.alerts.dead_end":     "DEAD_END_ALERT de AGENTE-00 → Diseñador de Investigación",
+      "iap.alerts.safe_harbor":  "SAFE_HARBOR_ALERT de VAL → AGENTE-00 + Diseñador"
+    }
+  },
+
+  "anti_hallucination_constraints": {
+    "description": "Reglas globales que TODOS los agentes deben respetar. El factory team debe verificar que cada system_prompt las incluya.",
+    "rules": [
+      "AA-01: Todo hallazgo en AGENT_OUTPUT.findings debe tener al menos un elemento en evidence[]. AGENTE-00 rechaza outputs sin evidencia.",
+      "AA-02: Si la evidencia no soporta una conclusión, el agente emite status=INSUFICIENCIA_DE_DATOS. Nunca infiere sin soporte.",
+      "AA-03: Toda afirmación lleva inference_type: OBSERVATION | INFERENCE_1 | INFERENCE_2 | HYPOTHESIS.",
+      "AA-04: findings con inference_type=INFERENCE_2 o HYPOTHESIS llevan requires_member_checking=true. AGENTE-00 los bloquea del Plan de Movilización hasta validación.",
+      "AA-05: Contradicciones entre agentes no las resuelve AGENTE-00. Las documenta como TENSION_ANALITICA y las incluye en el informe como pregunta generativa.",
+      "AA-06: Los agentes no atribuyen intenciones o motivaciones a participantes individuales. Solo patrones colectivos textuales.",
+      "AA-07: Cada output referencia al menos un elemento del Seed Prompt como ancla de relevancia."
+    ]
+  }
+}

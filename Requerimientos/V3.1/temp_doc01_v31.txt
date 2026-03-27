@@ -1,0 +1,209 @@
+ADD-IAP-MAS
+Architecture Design Document
+Enjambre de Agentes para Investigación Acción Participativa Asincrónica
+Tabla de Contenido
+1. Visión y Principios Fundacionales
+DigiKawsay es un sistema operativo para la inteligencia colectiva que automatiza la metodología IAP, permitiendo que equipos grandes co-construyan realidades y planes de acción de forma asincrónica, con el rigor de la ciencia de datos topológica.
+El sistema opera sobre tres principios de diseño no negociables que condicionan todas las decisiones de arquitectura:
+La investigación no es extractiva. Cada output del sistema debe ser accionable por la propia comunidad investigada.
+Sin evidencia, no hay hallazgo. Ningún agente puede emitir una afirmación analítica sin citar su fuente en el corpus.
+VAL es el único rostro del sistema. Los participantes interactúan exclusivamente con VAL. La existencia del enjambre analítico nunca se revela conversacionalmente.
+1.1 Escuela Filosófica y Marco Metodológico
+La arquitectura operacionaliza la praxis sentipensante de Orlando Fals Borda mediante un modelo de Inferencia Dual Entrelazada. A diferencia de los modelos NLP estándar que tratan sentimiento y contenido como dimensiones ortogonales, DigiKawsay modela el discurso como un espacio vectorial donde la dimensión emocional actúa como tensor de curvatura de la semántica racional.
+Para la transición de reflexión a acción coordinada, el sistema implementa la Ontología del Lenguaje y los Actos de Habla de Dunham/Searle. VAL clasifica cada interacción por su fuerza ilocucionaria: Afirmaciones, Declaraciones, Peticiones, Ofertas y Juicios. Estas clasificaciones alimentan directamente la red de compromisos del Plan de Movilización.
+1.2 Decisiones de Diseño Bloqueadas (v3.0)
+NOTA TÉCNICA  Estas decisiones están cerradas y se propagan a todos los documentos del paquete de fábrica. No deben reinterpretarse ni sobrescribirse sin autorización del Diseñador de Investigación.
+2. Topología del Enjambre — Patrón HRS
+DigiKawsay adopta el patrón Hierarchical Reflexive Swarm (HRS) con una modificación v3.0 estructural: la incorporación de una Capa 0.5 de Mediación Conversacional ocupada por VAL. Esto crea una arquitectura de cuatro capas con dos planos de operación diferenciados.
+2.1 Capas del Sistema
+2.2 Dos Planos de Operación
+La resolución de la Divergencia 1 (LangGraph vs. Pub/Sub) establece que el sistema opera en dos planos con naturalezas distintas que no comparten el mismo framework:
+Plano 1 — Gestión de Estado Conversacional
+Componentes: AGENTE-00 ↔ VAL ↔ Dialogue States por participante.
+Naturaleza: stateful, persistente semanas, fases IAP como máquina de estados, checkpointing obligatorio (requerimiento H1 del PRD).
+Framework: LangGraph con checkpointer sobre PostgreSQL.
+Justificación: El DigiKawsayState TypedDict, el checkpoint_id, el is_saturated y el consensus_reached son ciudadanos de primera clase en LangGraph. El patrón Supervisor modela exactamente la relación AGENTE-00 → VAL.
+Plano 2 — Dispatch del Enjambre Analítico
+Componentes: AGENTE-00 → Agent Registry → AG-01...AG-N.
+Naturaleza: stateless, descubrimiento dinámico en runtime, extensible sin redeploy.
+Framework: Google Cloud Pub/Sub + Agent Registry (plugin/microservice pattern).
+Justificación: El Agent Registry requiere routing dinámico en runtime. LangGraph compila el grafo en tiempo de inicialización; los nodos y edges son estáticos e incompatibles con descubrimiento dinámico.
+NOTA TÉCNICA  AGENTE-00 vive en ambos planos: es nodo LangGraph hacia VAL, y es publisher de Pub/Sub hacia el enjambre. LangGraph tiene soporte nativo para nodos que emiten a sistemas externos.
+2.3 Agente Registry — Patrón Plugin
+En v3.0, AGENTE-00 no referencia los agentes con IDs fijos en código. Consulta el Agent Registry en runtime usando capability-based routing. Este cambio habilita la extensibilidad sin rediseño arquitectural.
+capabilities_needed = analyze_seed_prompt(seed_prompt)
+active_agents = registry.query({
+  capabilities: { $intersects: capabilities_needed },
+  project_tags:  { $contains: current_project_type },
+  active:        true
+})
+Un nuevo agente solo necesita: (1) implementar el AgentContractInterface definido en DOC-03, (2) registrarse en el Registry con sus capabilities[], project_tags[] y pubsub_topic, y (3) suscribirse al topic correspondiente. AGENTE-00 ni VAL requieren modificación.
+3. VAL — Agente de Interfaz Conversacional
+Nueva en v3.0 — Capa 0.5 de Mediación Conversacional
+VAL es el único punto de contacto visible entre el enjambre y los equipos participantes. Su incorporación en v3.0 transforma el sistema de ingesta pasiva (participantes depositan inputs) a diálogo activo dirigido (VAL conduce entrevistas semiestructuradas guiadas por el enjambre).
+3.1 Doble Rol Simultáneo
+VAL opera con dos identidades simultáneas que no se revelan como separadas al participante:
+INVESTIGADOR SOCIAL IAP: Recopila datos cualitativos mediante entrevista semiestructurada. Aplica técnicas de sondeo: reflejo, paráfrasis, silencio estratégico, pregunta de contraste y pregunta de consecuencia. Clasifica cada turno por su Acto de Habla (Dunham/Searle).
+COACH ONTOLÓGICO (modelo OSAR): Observa las distinciones lingüísticas del participante: juicios vs. afirmaciones, emociones vs. estados de ánimo, promesas vs. deseos. Usa estas distinciones para profundizar, nunca para confrontar.
+3.2 Conversation Pool Manager — VAL 1:N
+En v3.0 VAL gestiona N conversaciones paralelas con N participantes del mismo proyecto. El Conversation Pool Manager es el componente central que administra este pool:
+N DialogueStates simultáneos, cada uno indexado por participant_id (OAuth sub claim).
+Priorización de sesiones activas: urgency de directiva pendiente (HIGH primero) → momentum_score invertido (menor momentum = más atención) → tiempo desde último turno (async fairness).
+Detección de patrones cross-participant para reportar a AGENTE-00.
+coverage_matrix al cierre del ciclo: {participant_id × topic_id → COVERED|PENDING|SATURATED}.
+3.3 Protocolo de Conversation Directives
+AGENTE-00 emite Conversation Directives hacia VAL. Este protocolo es bidireccional y asimétrico: la directiva fluye del enjambre al canal conversacional, pero nunca en la dirección opuesta (VAL no tiene acceso a los análisis internos del enjambre).
+VAL integra la directiva como INTENCIÓN, nunca como script. Si el estado emocional del participante hace inadecuada la directiva (RESISTANT o DISTRESSED), VAL emite DIRECTIVE_DEFERRED y continúa explorando libremente. El Directive Buffer mantiene máximo 3 directivas en cola; al superarse emite DIRECTIVE_OVERFLOW a AGENTE-00.
+3.4 Reglas de Oro de VAL (inviolables)
+(a) NUNCA reveles la existencia del enjambre analítico. Puedes confirmar que eres IA si preguntan directamente.
+(b) Nunca hagas más de dos preguntas en el mismo turno.
+(c) SAFE_HARBOR tiene prioridad absoluta sobre cualquier directiva activa. Si detectas DISTRESSED: suspende la investigación, acompaña, emite SAFE_HARBOR_ALERT.
+(d) Tu análisis es interno. Nunca interpretes en voz alta lo que el participante 'realmente dice'.
+(e) Emite DIALOGUE_SATURATION si el participante lleva 3 turnos consecutivos sin agregar información nueva.
+(f) Mínimo 2 turnos de exploración libre al inicio de cada sesión antes de aplicar la primera directiva.
+(g) Tu respuesta nunca supera 3 oraciones. Brevedad y presencia.
+4. Flujo IAP por Fases — Data Pipeline
+Fase 0 — Inicialización (Seed)
+El Diseñador de Investigación inyecta el Seed Prompt: objetivo organizacional, preguntas de investigación, restricciones éticas, marco metodológico preferido.
+AGENTE-00 recibe el Seed, ejecuta analyze_seed_prompt(), consulta el Agent Registry y determina el set de agentes activos para este proyecto.
+AGENTE-00 escribe el estado inicial en PostgreSQL: cycle_id=1, phase=INVESTIGACION.
+AGENTE-00 crea el namespace del ciclo en Vector DB: {project_id}/cycle_1.
+Fase 0.5 — Mediación Conversacional (VAL, continua)
+Los participantes interactúan con VAL vía Telegram (MVP) o API agnóstica.
+El Channel Abstraction Layer normaliza cada mensaje en CHANNEL_INBOUND_MESSAGE y verifica el JWT OAuth (consent_granted=true bloqueante).
+VAL procesa el mensaje, actualiza el DialogueState, genera la respuesta conversacional y emite un DIALOGUE_PACKET a AGENTE-00 vía topic iap.val.packet.
+AGENTE-00 puede emitir CONVERSATION_DIRECTIVE hacia VAL en cualquier momento. VAL la recibe en su Directive Buffer y la integra en el próximo turno natural.
+Fase 1 — Investigación y Análisis Asincrónico
+Trigger: corpus_size >= umbral_mínimo configurado por proyecto, o señal de fin de sesión.
+AGENTE-00 despacha TASK_ENVELOPES en paralelo: Bloque A (AG-01..04, diagnóstico) y Bloque B (AG-05..08, corpus).
+Los agentes hacen RAG sobre el Vector DB usando los corpus_refs del envelope. Cada agente opera de forma independiente.
+Para proyectos con múltiples participantes, AGENTE-00 puede despachar task_type=CROSS_ANALYZE para análisis diferencial entre participantes.
+Todos los AGENT_OUTPUTs retornan al topic iap.swarm.output. AGENTE-00 los consume y ejecuta el Contradiction Detector.
+Fase 2 — Acción: Síntesis y Plan de Movilización
+AGENTE-00 consolida los hallazgos validados en el Insight Reducer (AGG). Las contradicciones entre agentes no se resuelven: se documentan como TENSION_ANALITICA.
+Si data_gaps.cycles_open >= 2 en un constructo crítico: DEAD_END_ALERT al Diseñador de Investigación.
+AGENTE-00 genera el Plan de Movilización JSON y lo envía a AG-09 para síntesis visual.
+AG-09 produce dos pipelines: técnico (Mermaid/D3 + scorecard para Project Leader) y narrativo (storyboard/cómic para el equipo participante).
+Output bifurcado: Informe narrativo al equipo participante; Action Plan JSON al Project Leader. Son dos canales y dos formatos distintos.
+Fase 3 — Participación: Devolución y Nuevo Ciclo
+El Informe de Devolución incluye: (1) Lo que escuchamos, (2) Hallazgos con nivel de confianza, (3) Brechas declaradas, (4) Preguntas generativas, (5) Plan de Movilización, (6) Agenda de member-checking.
+El equipo participante responde al informe en sesiones asincrónicas con VAL. Sus respuestas son el corpus del ciclo siguiente (member-checking).
+AG-05 monitorea el Saturation Index. Cuando saturation_index > 0.85: AGENTE-00 propone cierre del ciclo al Diseñador. El ciclo se cierra o se inicia cycle_id+1.
+5. Esquema de Estado del Grafo (LangGraph)
+El DigiKawsayState es el objeto central que garantiza la persistencia y la memoria colectiva del sistema. Se almacena en el checkpointer de LangGraph sobre PostgreSQL. Su estructura refleja la doble naturaleza del sistema: estado conversacional (VAL) y estado analítico (enjambre).
+class DigiKawsayState(TypedDict):
+    # -- Plano conversacional (VAL) --
+    messages: Annotated[list, add_messages]
+    dialogue_states: Dict[str, DialogueState]  # indexado por participant_id (OAuth sub)
+    directive_buffer: List[ConversationDirective]
+    # -- Configuración del proyecto --
+    project_config: Dict[str, Any]  # goal, school, asynchronous, channel, consent_required
+    # -- Directivas del enjambre (invisible para participantes) --
+    expert_directives: List[str]
+    pending_directives: List[ConversationDirective]
+    # -- Resultados analíticos --
+    topology_data: Dict[str, Any]   # outputs AG-08 (Giotto-TDA / Ripser)
+    network_metrics: Dict[str, Any] # outputs AG-05/AG-07 (SNA/ONA)
+    cross_participant_patterns: Dict[str, Any]
+    # -- Indicadores de convergencia --
+    is_saturated: bool               # AG-05 saturation_index > 0.85
+    saturation_index: float
+    consensus_reached: bool
+    cycle_id: int
+    iap_phase: Literal['INVESTIGACION','ACCION','PARTICIPACION','CLOSED']
+    # -- Trazabilidad --
+    evidence_trail: List[EvidenceRef]
+    data_gaps: List[DataGap]
+    coverage_matrix: Dict[str, Dict[str, str]]  # {participant_id: {topic_id: status}}
+6. Infraestructura de Memoria y Almacenamiento
+6.1 Pipeline de Ingesta de Mensajes
+El Preprocesador es un servicio de ingesta (no un agente LLM). Ejecuta en orden:
+(1) Validación del JWT OAuth: consent_granted=true requerido.
+(2) PII Anonymization: nombres propios, emails, teléfonos, identificadores personales son reemplazados por tokens antes de persistir en el Vector DB o procesar en el enjambre.
+(3) Transcripción de audio: Gemini Audio API con timestamps por segmento.
+(4) Chunking: fragmentos de 512 tokens con 128 tokens de overlap.
+(5) Metadata injection: {participant_id, session_id, timestamp, modality, channel}.
+(6) Embedding: Gemini text-embedding-004.
+(7) Write al Vector DB namespace del ciclo activo.
+7. Protocolo Anti-Alucinación del Enjambre
+El sistema implementa siete reglas universales que aplican a todos los agentes sin excepción. El equipo de fábrica debe verificar que cada system_prompt en DOC-03 las incluya y que la infraestructura de AGENTE-00 las valide estructuralmente en los AGENT_OUTPUTs recibidos.
+7.1 Escalera de Confianza para Reporting
+Cada hallazgo consolidado en el Informe de Devolución lleva un nivel de confianza explícito que determina qué acciones están permitidas con él:
+8. Canal Telegram — Especificación del MVP
+El MVP utiliza Telegram Bot API como canal de entrada/salida de VAL. El Channel Abstraction Layer aísla el sistema del protocolo específico de Telegram, garantizando que el núcleo del sistema sea agnóstico al canal.
+9. Divergencias Resueltas entre SESD v1.1 y ADD v3.0
+El análisis de alineación entre los documentos del producto y el ADD original identificó 6 divergencias. Todas están resueltas en esta versión v3.0. El siguiente registro documenta cada resolución para trazabilidad del equipo de fábrica.
+9.1 Elementos del Producto no Cubiertos en v1.0 — Incorporados en v3.0
+10. Requerimientos No Funcionales (NFR)
+11. Glosario de Términos IAP y Metodológicos
+NOTA TÉCNICA  Este glosario es obligatorio para el equipo de fábrica. Los términos marcados con (*) tienen implicaciones directas en el comportamiento esperado del sistema. Interpretar estos términos de manera diferente a lo definido aquí puede generar implementaciones funcionalmente incorrectas.
+12. Configuración de Runtime Global
+Model:  gemini-1.5-pro-latest — todos los agentes.
+Embedding model:  text-embedding-004 (Gemini) — Preprocesador y AG-08.
+Grounding:  Google Search Grounding: DESACTIVADO. Solo corpus interno del proyecto. Vertex AI Search: ACTIVADO sobre Vector DB del ciclo activo.
+Safety settings:  HARM_CATEGORY_DANGEROUS_CONTENT: BLOCK_ONLY_HIGH | HARM_CATEGORY_HARASSMENT: BLOCK_MEDIUM_AND_ABOVE.
+13. Estado del Documento y Próximos Pasos
+Este documento DOC-01 v3.0.0 está listo para revisión de fábrica. Cierra todas las divergencias identificadas en el análisis de alineación y consolida las aclaraciones arquitecturales v3.0.
+NOTA TÉCNICA  Decisiones pendientes de fábrica antes de Sprint 2: (V1) Kubernetes vs. Cloud Run para health_endpoints del Agent Registry. (V2) PostgreSQL vs. Redis para LangGraph checkpointer. (V3) Gemini Imagen disponible en MVP para AG-09 pipeline narrativo, o solo texto de viñetas.
+  AMENDMENT — DOC-01 v3.1.0 — Compensación Distribuida: Outbox Pattern + Idempotency Keys  
+RAZÓN DEL AMENDMENT:  Hallazgo validado: gap de especificación en el mecanismo de compensación entre LangGraph checkpoint (PostgreSQL) y Pub/Sub dispatch. Este amendment añade los mecanismos Outbox Pattern e Idempotency Keys que la fábrica necesita para implementar AGENTE-00 y los agentes especialistas de forma resiliente ante fallos parciales.
+Las secciones anteriores de este documento permanecen vigentes. Este amendment complementa y no reemplaza el contenido original.
+AMENDMENT — Sección 2.3: Mecanismo de Compensación Distribuida
+La arquitectura de dos planos (LangGraph + Pub/Sub) introduce el problema clásico del dual-write en sistemas distribuidos: el checkpoint de LangGraph (PostgreSQL) y el dispatch a Pub/Sub son dos operaciones de escritura independientes. Un fallo entre ambas produce uno de tres escenarios de corrupción de estado.
+Escenarios de fallo cubiertos
+  A — Mensaje perdido  
+PROBLEMA:
+AGENTE-00 hace checkpoint con 'AG-05 despachado' en active_agents, pero el Pub/Sub publish falla. El mensaje nunca llega al agente. AGENTE-00 espera un output que nunca llega.
+SOLUCIÓN:
+Outbox Pattern: el publish no lo hace AGENTE-00 directamente, lo hace el Outbox Worker leyendo la tabla outbox.
+  B — Double dispatch tras crash  
+PROBLEMA:
+AGENTE-00 publica a Pub/Sub y cae antes del checkpoint. Al reiniciarse, LangGraph replay vuelve a despachar el mismo Task Envelope. AG-05 recibe el mismo trabajo dos veces.
+SOLUCIÓN:
+Idempotency Keys: cada agente verifica processed_envelopes antes de procesar. El duplicado se descarta silenciosamente.
+  C — Output duplicado en Insight Reducer  
+PROBLEMA:
+Pub/Sub reentrega un AGENT_OUTPUT ya procesado (at-least-once delivery). AGENTE-00 consolida el mismo finding dos veces, distorsionando los niveles de confianza.
+SOLUCIÓN:
+Output deduplication: AGENTE-00 verifica output_id en evidence_trail antes de consolidar. El duplicado se descarta.
+Outbox Pattern — Diagrama de flujo
+BEGIN TRANSACTION
+  LangGraph checkpoint → PostgreSQL (DigiKawsayState)
+  INSERT INTO outbox (envelope_id, topic, payload, status='PENDING')
+COMMIT TRANSACTION
+         ↓
+Outbox Worker (proceso independiente, poll cada 5s):
+  SELECT * FROM outbox WHERE status='PENDING'
+  Pub/Sub publish(payload)
+  UPDATE outbox SET status='DELIVERED', delivered_at=NOW()
+Garantía: el checkpoint y la intención de dispatch
+son atómicos. Pub/Sub publish nunca falla silenciosamente.
+Idempotency Protocol — Flujo en agentes especialistas
+# Cada agente AG-01..AG-09 ejecuta esto ANTES de analizar:
+INSERT INTO processed_envelopes (agent_id, envelope_id, processed_at)
+  VALUES ($agent_id, $envelope_id, NOW())
+  ON CONFLICT (agent_id, envelope_id) DO NOTHING
+  RETURNING envelope_id;
+-- Si RETURNING devuelve NULL:
+--   mensaje duplicado → descartar, no generar output
+-- Si RETURNING devuelve el UUID:
+--   proceder con el análisis normalmente
+Output Deduplication — AGENTE-00 Insight Reducer
+# AGENTE-00 antes de consolidar cualquier AGENT_OUTPUT:
+SELECT COUNT(*) FROM evidence_trail
+WHERE project_id = $1
+  AND cycle_id   = $2
+  AND agent_id   = $3
+  AND envelope_id_ref = $4;
+-- Si COUNT > 0: output duplicado → DUPLICATE_OUTPUT_DISCARDED en logs
+-- Si COUNT = 0: proceder con consolidación normal
+NFR actualizados (reemplaza NFR-01 de Sección 10)
+La restauración del Hot Path (hallazgo anterior) y este amendment combinados producen los siguientes NFRs definitivos:
+NFR-01a: Latencia Hot Path (VAL responde al participante)
+  Target: < 3,500 ms  |  Medición: hot_path_latency_ms en CHANNEL_OUTBOUND_MESSAGE
+NFR-01b: Latencia Cold Path (enjambre completa análisis)
+  Target: < 45,000 ms  |  Medición: swarm_latency_ms en CYCLE_STATE
+NFR-08: Outbox Worker entrega pendientes
+  Target: < 60,000 ms desde PENDING hasta DELIVERED  |  Medición: outbox.delivered_at - outbox.created_at
+NFR-09: Idempotency: cero outputs duplicados consolidados
+  Target: 0 DUPLICATE_OUTPUT_DISCARDED que lleguen al Insight Reducer  |  Medición: Conteo en logs de AGENTE-00

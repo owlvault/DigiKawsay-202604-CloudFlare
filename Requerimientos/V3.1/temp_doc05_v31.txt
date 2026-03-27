@@ -1,0 +1,980 @@
+DOC-05
+Infrastructure Spec
+YAML · Stack Técnico · Agent Registry Infra
+1. Notas sobre Decisiones Pendientes (V1/V2/V3)
+Este documento incorpora defaults de MVP para las tres decisiones de infraestructura pendientes de confirmación. Cada sección afectada indica el default usado y la configuración alternativa. Un cambio en cualquiera de estas decisiones requiere únicamente actualizar las secciones indicadas, sin rediseño del stack completo.
+V1 — Deployment target (default: Cloud Run):  El documento usa Cloud Run para todos los servicios. Si la fábrica elige Kubernetes, reemplazar los bloques Cloud Run (Sección 3) por los manifiestos Kubernetes incluidos en el Anexo A. El resto del documento no cambia.
+V2 — LangGraph checkpointer (default: PostgreSQL / Cloud SQL):  El documento configura PostgreSQL como checkpointer de LangGraph. Si se elige Redis (menor latencia), reemplazar la sección 4.2 con la configuración de Redis incluida en el Anexo B. El DigiKawsayState TypedDict no cambia.
+V3 — AG-09 pipeline narrativo (default: texto de viñetas sin imagen):  El documento configura AG-09 sin Gemini Imagen API en el MVP. La variable GEMINI_IMAGEN_ENABLED=false activa el fallback de texto narrativo. Cuando Gemini Imagen esté disponible, cambiar a true en la config de AG-09. Sin cambios en arquitectura.
+2. Stack Técnico Completo
+DECISIÓN DE STACK:  Todos los servicios son stateless en Cloud Run. El único estado duradero vive en: PostgreSQL (LangGraph checkpoint + Agent Registry + CYCLE_STATE), Weaviate (embeddings + chunks), y GCS (artefactos). Esta separación permite escalar los workers de Cloud Run sin coordinación.
+3. Configuración Cloud Run — Servicios
+Cada componente del sistema se despliega como un servicio independiente de Cloud Run. Los servicios del enjambre (AG-01 a AG-09) comparten la misma imagen base pero reciben configuración distinta vía variables de entorno, específicamente el agent_id y el pubsub_topic de suscripción.
+  3.1  channel-layer — Interfaz Telegram / API  
+# channel-layer — Cloud Run service
+# Recibe webhooks de Telegram y normaliza a CHANNEL_INBOUND_MESSAGE
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: digikawsay-channel-layer
+  labels:
+    app: digikawsay
+    component: channel-layer
+    env: production
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '1'
+        autoscaling.knative.dev/maxScale: '20'
+        autoscaling.knative.dev/targetConcurrency: '80'
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 30          # Telegram webhook timeout = 60s; mantener < 30s
+      serviceAccountName: digikawsay-channel-sa
+      containers:
+        - image: gcr.io/PROJECT_ID/channel-layer:VERSION
+          resources:
+            limits:
+              cpu: '1'
+              memory: 512Mi
+            requests:
+              cpu: '250m'
+              memory: 256Mi
+          env:
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: telegram-bot-token
+                  key: latest
+            - name: AUTH_SERVICE_URL
+              value: 'https://digikawsay-auth.run.app'
+            - name: PUBSUB_INBOUND_TOPIC
+              value: 'iap.channel.inbound'
+            - name: PUBSUB_OUTBOUND_SUBSCRIPTION
+              value: 'channel-outbound-sub'
+            - name: GCP_PROJECT_ID
+              value: 'PROJECT_ID'
+          ports:
+            - containerPort: 8080
+  3.2  auth-service — OAuth/SSO + Consentimiento  
+# auth-service — Cloud Run service
+# Gestiona OAuth Google/Microsoft, emite JWT, verifica consent_granted
+---
+metadata:
+  name: digikawsay-auth
+  labels:
+    component: auth
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '1'
+        autoscaling.knative.dev/maxScale: '10'
+    spec:
+      timeoutSeconds: 30
+      serviceAccountName: digikawsay-auth-sa
+      containers:
+        - image: gcr.io/PROJECT_ID/auth-service:VERSION
+          resources:
+            limits: { cpu: '1', memory: 512Mi }
+            requests: { cpu: '250m', memory: 256Mi }
+          env:
+            - name: GOOGLE_OAUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef: { name: google-oauth-client-id, key: latest }
+            - name: GOOGLE_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: google-oauth-client-secret, key: latest }
+            - name: MICROSOFT_OAUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef: { name: microsoft-oauth-client-id, key: latest }
+            - name: MICROSOFT_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: microsoft-oauth-client-secret, key: latest }
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: jwt-secret, key: latest }
+            - name: JWT_EXPIRY_HOURS
+              value: '168'            # 7 días — conversaciones asincrónicas largas
+            - name: CONSENT_SCREEN_URL
+              value: 'https://digikawsay-consent.web.app'
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: cloud-sql-url, key: latest }
+  3.3  preprocessor — PII · Chunking · Embeddings  
+# preprocessor — Cloud Run service
+# Consume iap.channel.inbound, anonimiza PII, chunkea, genera embeddings,
+# escribe en Vector DB y publica en iap.val.packet
+---
+metadata:
+  name: digikawsay-preprocessor
+  labels:
+    component: preprocessor
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '2'
+        autoscaling.knative.dev/maxScale: '50'
+        autoscaling.knative.dev/targetConcurrency: '10'  # bajo: cada msg es pesado
+    spec:
+      timeoutSeconds: 120
+      serviceAccountName: digikawsay-preprocessor-sa
+      containers:
+        - image: gcr.io/PROJECT_ID/preprocessor:VERSION
+          resources:
+            limits: { cpu: '2', memory: 2Gi }
+            requests: { cpu: '500m', memory: 1Gi }
+          env:
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef: { name: gemini-api-key, key: latest }
+            - name: GEMINI_AUDIO_MODEL
+              value: 'gemini-1.5-pro-latest'
+            - name: GEMINI_EMBEDDING_MODEL
+              value: 'text-embedding-004'
+            - name: CHUNK_SIZE_TOKENS
+              value: '512'
+            - name: CHUNK_OVERLAP_TOKENS
+              value: '128'
+            - name: WEAVIATE_URL
+              valueFrom:
+                secretKeyRef: { name: weaviate-url, key: latest }
+            - name: WEAVIATE_API_KEY
+              valueFrom:
+                secretKeyRef: { name: weaviate-api-key, key: latest }
+            - name: PII_ENTITIES_TO_ANONYMIZE
+              value: 'PERSON,EMAIL_ADDRESS,PHONE_NUMBER,LOCATION,NRP,CREDIT_CARD'
+            - name: GCS_AUDIO_BUCKET
+              value: 'digikawsay-audio-raw'
+            - name: PUBSUB_INBOUND_SUBSCRIPTION
+              value: 'preprocessor-inbound-sub'
+            - name: PUBSUB_PACKET_TOPIC
+              value: 'iap.val.packet'
+  3.4  val-service — Agente Conversacional 1:N  
+# val-service — Cloud Run service
+# LangGraph node. Gestiona Conversation Pool. Produce DIALOGUE_PACKET.
+# Consume iap.val.packet (desde Preprocessor) y iap.orchestrator.directive
+---
+metadata:
+  name: digikawsay-val
+  labels:
+    component: val
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '2'
+        autoscaling.knative.dev/maxScale: '100'   # 1000 participantes / ~10 por instancia
+        autoscaling.knative.dev/targetConcurrency: '10'
+    spec:
+      timeoutSeconds: 130          # > SLA 120s para margen
+      serviceAccountName: digikawsay-val-sa
+      containers:
+        - image: gcr.io/PROJECT_ID/val-service:VERSION
+          resources:
+            limits: { cpu: '2', memory: 4Gi }
+            requests: { cpu: '1', memory: 2Gi }
+          env:
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef: { name: gemini-api-key, key: latest }
+            - name: GEMINI_MODEL
+              value: 'gemini-1.5-pro-latest'
+            - name: GEMINI_TEMPERATURE
+              value: '0.7'
+            - name: GEMINI_MAX_OUTPUT_TOKENS
+              value: '600'
+            - name: LANGGRAPH_CHECKPOINT_DB
+              valueFrom:
+                secretKeyRef: { name: cloud-sql-url, key: latest }
+            - name: WEAVIATE_URL
+              valueFrom:
+                secretKeyRef: { name: weaviate-url, key: latest }
+            - name: PUBSUB_PACKET_INBOUND_SUB
+              value: 'val-packet-sub'
+            - name: PUBSUB_DIRECTIVE_SUB
+              value: 'val-directive-sub'
+            - name: PUBSUB_OUTBOUND_TOPIC
+              value: 'iap.channel.outbound'
+            - name: PUBSUB_VAL_TO_AG00_TOPIC
+              value: 'iap.val.to.ag00'
+            - name: MAX_ACTIVE_SESSIONS_DEFAULT
+              value: '50'             # Override por proyecto en project_config
+            - name: DIRECTIVE_BUFFER_MAX
+              value: '3'
+            - name: SAFE_HARBOR_ALERT_TOPIC
+              value: 'iap.alerts.safe_harbor'
+            - name: SLA_TARGET_MS
+              value: '120000'
+            - name: HOLDING_MESSAGE_THRESHOLD_MS
+              value: '30000'
+  3.5  agente00-service — Orquestador Supervisor  
+# agente00-service — Cloud Run service
+# LangGraph Supervisor node + Pub/Sub publisher hacia enjambre
+# Es el único servicio que escribe en Agent Registry (PostgreSQL)
+---
+metadata:
+  name: digikawsay-agente00
+  labels:
+    component: agente00
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '1'
+        autoscaling.knative.dev/maxScale: '10'
+        autoscaling.knative.dev/targetConcurrency: '5'
+    spec:
+      timeoutSeconds: 300
+      serviceAccountName: digikawsay-ag00-sa
+      containers:
+        - image: gcr.io/PROJECT_ID/agente00-service:VERSION
+          resources:
+            limits: { cpu: '4', memory: 8Gi }
+            requests: { cpu: '2', memory: 4Gi }
+          env:
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef: { name: gemini-api-key, key: latest }
+            - name: GEMINI_MODEL
+              value: 'gemini-1.5-pro-latest'
+            - name: GEMINI_TEMPERATURE
+              value: '0.1'
+            - name: GEMINI_MAX_OUTPUT_TOKENS
+              value: '4096'
+            - name: LANGGRAPH_CHECKPOINT_DB
+              valueFrom:
+                secretKeyRef: { name: cloud-sql-url, key: latest }
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: cloud-sql-url, key: latest }
+            - name: AGENT_REGISTRY_TABLE
+              value: 'agent_registry'
+            - name: PUBSUB_VAL_PACKET_SUB
+              value: 'ag00-val-packet-sub'
+            - name: PUBSUB_SWARM_OUTPUT_SUB
+              value: 'ag00-swarm-output-sub'
+            - name: PUBSUB_DIRECTIVE_TOPIC
+              value: 'iap.orchestrator.directive'
+            - name: PUBSUB_REPORT_TOPIC
+              value: 'iap.orchestrator.report'
+            - name: DEAD_END_ALERT_TOPIC
+              value: 'iap.alerts.dead_end'
+            - name: SWARM_TASK_ENVELOPE_TTL_SECONDS
+              value: '300'
+            - name: SATURATION_INDEX_THRESHOLD
+              value: '0.85'
+            - name: DATA_GAP_DEAD_END_CYCLES
+              value: '2'
+  3.6  swarm-agent — Template de Agente Especialista (AG-01 a AG-09)  
+Todos los agentes especialistas comparten la misma imagen base (swarm-agent). La identidad de cada agente se inyecta vía variables de entorno. Esto permite desplegar un agente nuevo simplemente creando un Cloud Run service con la imagen base y las variables correspondientes de DOC-03.
+# swarm-agent — Template. Replicar para cada AG-XX cambiando las variables.
+# Ejemplo: AG-01 Cultura Organizacional
+---
+metadata:
+  name: digikawsay-ag01
+  labels:
+    component: swarm-agent
+    agent_id: AG-01
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '0'   # Scale to zero cuando no hay trabajo
+        autoscaling.knative.dev/maxScale: '20'
+        autoscaling.knative.dev/targetConcurrency: '3'
+    spec:
+      timeoutSeconds: 120
+      serviceAccountName: digikawsay-swarm-sa
+      containers:
+        - image: gcr.io/PROJECT_ID/swarm-agent:VERSION
+          resources:
+            limits: { cpu: '2', memory: 4Gi }
+            requests: { cpu: '500m', memory: 1Gi }
+          env:
+            - name: AGENT_ID
+              value: 'AG-01'
+            - name: AGENT_DISPLAY_NAME
+              value: 'Especialista en Cultura Organizacional'
+            - name: PUBSUB_TASK_SUBSCRIPTION
+              value: 'ag01-task-sub'          # iap.swarm.ag01 → ag01-task-sub
+            - name: PUBSUB_OUTPUT_TOPIC
+              value: 'iap.swarm.output'
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef: { name: gemini-api-key, key: latest }
+            - name: GEMINI_MODEL
+              value: 'gemini-1.5-pro-latest'
+            - name: GEMINI_TEMPERATURE
+              value: '0.3'         # AG-01..04: 0.3 | AG-05: 0.25 | AG-06: 0.2
+            - name: GEMINI_MAX_OUTPUT_TOKENS
+              value: '8192'
+            - name: WEAVIATE_URL
+              valueFrom:
+                secretKeyRef: { name: weaviate-url, key: latest }
+            - name: RAG_TOP_K
+              value: '10'
+            - name: HEALTH_ENDPOINT_PATH
+              value: '/health'
+            # AG-09 única diferencia:
+            - name: GEMINI_IMAGEN_ENABLED
+              value: 'false'        # V3 decision: false en MVP, true cuando disponible
+PARA CADA AGENTE:  Crear un Cloud Run service usando el template anterior cambiando: name, AGENT_ID, AGENT_DISPLAY_NAME, PUBSUB_TASK_SUBSCRIPTION, GEMINI_TEMPERATURE. Los agentes AG-08 (TDA) y AG-09 (Visual) tienen recursos adicionales detallados en Sección 3.7.
+  3.7  Configuración Especial: AG-08 (TDA) y AG-09 (Visual)  
+# AG-08 requiere más memoria para cálculos de homología persistente
+# AG-09 requiere acceso a Gemini Imagen API (si V3=true)
+# AG-08 override de recursos:
+resources:
+  limits: { cpu: '4', memory: 16Gi }   # Ripser sobre corpus grande puede ser intensivo
+  requests: { cpu: '2', memory: 8Gi }
+# AG-08 variables adicionales:
+- name: AGENT_ID
+  value: 'AG-08'
+- name: GEMINI_TEMPERATURE
+  value: '0.2'
+- name: TDA_MIN_CORPUS_FRAGMENTS
+  value: '50'             # < 50 → CORPUS_INSUFICIENTE_PARA_TDA
+- name: TDA_PERSISTENCE_THRESHOLD
+  value: '0.15'           # umbral de persistencia topológica significativa
+- name: HDBSCAN_MIN_CLUSTER_SIZE
+  value: '5'
+# AG-09 variables adicionales:
+- name: AGENT_ID
+  value: 'AG-09'
+- name: GEMINI_TEMPERATURE
+  value: '0.65'
+- name: GEMINI_IMAGEN_ENABLED
+  value: 'false'          # V3: cambiar a 'true' cuando Imagen API disponible
+- name: STORYBOARD_MAX_PANELS
+  value: '6'
+- name: GCS_ARTIFACTS_BUCKET
+  value: 'digikawsay-artifacts'
+4. Bases de Datos — PostgreSQL (Cloud SQL)
+Una única instancia de Cloud SQL para PostgreSQL 15 sirve tanto al checkpointer de LangGraph como a las tablas operacionales del sistema. Las tablas se separan en dos schemas: langgraph (gestionado por LangGraph) y digikawsay (gestionado por el sistema).
+  4.1  Cloud SQL — Configuración de Instancia  
+# Cloud SQL Instance — terraform resource equivalente
+resource: google_sql_database_instance
+name: digikawsay-postgres
+database_version: POSTGRES_15
+region: us-central1
+settings:
+  tier: db-g1-small              # MVP. Escalar a db-n1-standard-2 en producción
+  disk_size: 20                  # GB. Autoresize habilitado
+  disk_autoresize: true
+  disk_autoresize_limit: 200
+  backup_configuration:
+    enabled: true
+    start_time: '02:00'
+    point_in_time_recovery_enabled: true
+    transaction_log_retention_days: 7
+  ip_configuration:
+    ipv4_enabled: false           # Sin IP pública. Acceso solo via Cloud SQL Auth Proxy
+    private_network: projects/PROJECT_ID/global/networks/digikawsay-vpc
+  database_flags:
+    - name: max_connections
+      value: '200'
+    - name: work_mem
+      value: '64MB'
+    - name: shared_preload_libraries
+      value: 'pg_stat_statements'
+databases:
+  - name: digikawsay
+    charset: UTF8
+    collation: en_US.UTF8
+users:
+  - name: digikawsay_app       # Usado por todos los servicios
+    password: SECRET_MANAGER   # Secret: cloud-sql-url contiene connection string completo
+  - name: digikawsay_readonly  # Usado por dashboards y monitoreo
+    password: SECRET_MANAGER
+  4.2  Schema DDL — Tablas Operacionales  
+# Schema: digikawsay
+# Ejecutar en orden. LangGraph crea su propio schema 'langgraph' automáticamente.
+CREATE TABLE projects (
+  project_id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name              TEXT NOT NULL,
+  seed_prompt       TEXT,
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  created_by        TEXT,             -- email del Diseñador (solo en esta tabla)
+  status            TEXT DEFAULT 'active' CHECK (status IN ('active','closed','archived'))
+);
+CREATE TABLE cycles (
+  cycle_id          SERIAL,
+  project_id        UUID REFERENCES projects(project_id),
+  phase             TEXT CHECK (phase IN ('INVESTIGACION','ACCION','PARTICIPACION','CLOSED')),
+  started_at        TIMESTAMPTZ DEFAULT NOW(),
+  closed_at         TIMESTAMPTZ,
+  n_participants_active INTEGER DEFAULT 0,
+  n_dialogue_packets INTEGER DEFAULT 0,
+  saturation_reached BOOLEAN DEFAULT false,
+  saturation_index  FLOAT DEFAULT 0.0,
+  consensus_reached BOOLEAN DEFAULT false,
+  active_agents     TEXT[],
+  PRIMARY KEY (project_id, cycle_id)
+);
+CREATE TABLE dialogue_states (
+  participant_id    TEXT NOT NULL,     -- OAuth sub claim
+  project_id        UUID REFERENCES projects(project_id),
+  cycle_id          INTEGER,
+  checkpoint_id     TEXT,              -- LangGraph checkpoint ID
+  turn_count        INTEGER DEFAULT 0,
+  emotional_register TEXT CHECK (emotional_register IN ('OPEN','GUARDED','RESISTANT','DISTRESSED')),
+  momentum_score    FLOAT DEFAULT 0.5,
+  topics_covered    TEXT[],
+  topics_pending    TEXT[],
+  saturation_flags  TEXT[],
+  active_directive_id TEXT,
+  safe_harbor_active BOOLEAN DEFAULT false,
+  status            TEXT DEFAULT 'active' CHECK (status IN ('active','timed_out','closed','withdrawn','zombie')),
+  last_turn_at      TIMESTAMPTZ,
+  PRIMARY KEY (participant_id, project_id, cycle_id)
+);
+CREATE TABLE data_gaps (
+  gap_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id        UUID REFERENCES projects(project_id),
+  cycle_id          INTEGER,
+  constructo        TEXT NOT NULL,
+  agent_id          TEXT NOT NULL,
+  cycles_open       INTEGER DEFAULT 1,
+  status            TEXT DEFAULT 'OPEN' CHECK (status IN ('OPEN','RESOLVED','DEAD_END','OUT_OF_SCOPE')),
+  created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE evidence_trail (
+  evidence_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id        UUID REFERENCES projects(project_id),
+  cycle_id          INTEGER,
+  finding_id        UUID,
+  agent_id          TEXT NOT NULL,
+  chunk_id          TEXT NOT NULL,    -- ID en Vector DB
+  cita_textual      TEXT,             -- max 300 chars, ya anonimizada
+  inference_type    TEXT CHECK (inference_type IN ('OBSERVATION','INFERENCE_1','INFERENCE_2','HYPOTHESIS')),
+  created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE agent_registry (
+  agent_id          TEXT PRIMARY KEY,
+  display_name      TEXT NOT NULL,
+  capabilities      TEXT[],
+  project_tags      TEXT[],
+  pubsub_topic      TEXT NOT NULL,
+  health_endpoint   TEXT NOT NULL,
+  version           TEXT NOT NULL,
+  added_by          TEXT,
+  added_at          TIMESTAMPTZ DEFAULT NOW(),
+  active            BOOLEAN DEFAULT true,
+  runtime_config    JSONB             -- temperatura, max_tokens, etc.
+);
+CREATE TABLE channel_outbound_messages (
+  message_id        UUID PRIMARY KEY,
+  in_reply_to       UUID,
+  participant_id    TEXT NOT NULL,
+  project_id        UUID,
+  channel           TEXT,
+  latency_ms        INTEGER,
+  sla_breached      BOOLEAN DEFAULT false,
+  created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+-- Índices críticos para performance
+CREATE INDEX idx_dialogue_states_project ON dialogue_states(project_id, cycle_id);
+CREATE INDEX idx_dialogue_states_status ON dialogue_states(status) WHERE status = 'active';
+CREATE INDEX idx_data_gaps_open ON data_gaps(project_id) WHERE status = 'OPEN';
+CREATE INDEX idx_evidence_trail_finding ON evidence_trail(finding_id);
+CREATE INDEX idx_agent_registry_caps ON agent_registry USING GIN(capabilities);
+CREATE INDEX idx_agent_registry_active ON agent_registry(active) WHERE active = true;
+CREATE INDEX idx_outbound_sla ON channel_outbound_messages(sla_breached, created_at);
+V2 — Redis alternativo:  Si se elige Redis como checkpointer de LangGraph en lugar de PostgreSQL, las tablas dialogue_states se mantienen en PostgreSQL pero el checkpoint de LangGraph (DigiKawsayState) migra a Redis. Ver Anexo B para la configuración Redis.
+5. Vector DB — Weaviate
+Weaviate gestiona los embeddings del corpus y sirve las operaciones RAG de todos los agentes. Se despliega como servicio Cloud Run en el MVP. Para producción con alto volumen, migrar a Vertex AI Vector Search o Weaviate Cloud Services.
+  5.1  Schema de Clases Weaviate  
+# Weaviate schema — ejecutar POST /v1/schema para cada clase
+# Vectorizer: text2vec-palm usa Gemini text-embedding-004 via Vertex AI
+classes:
+  - class: RawFragment
+    description: 'Fragmento de texto anonimizado del corpus de participantes'
+    vectorizer: text2vec-palm
+    moduleConfig:
+      text2vec-palm:
+        projectId: PROJECT_ID
+        apiEndpoint: us-central1-aiplatform.googleapis.com
+        modelId: textembedding-gecko@003   # equivalente a text-embedding-004
+    properties:
+      - name: participant_id
+        dataType: [text]
+        description: 'OAuth sub claim del participante'
+        moduleConfig:
+          text2vec-palm: { skip: true }    # No vectorizar IDs
+      - name: project_id
+        dataType: [text]
+        moduleConfig:
+          text2vec-palm: { skip: true }
+      - name: cycle_id
+        dataType: [int]
+        moduleConfig:
+          text2vec-palm: { skip: true }
+      - name: session_id
+        dataType: [text]
+        moduleConfig:
+          text2vec-palm: { skip: true }
+      - name: text
+        dataType: [text]
+        description: 'Texto anonimizado del fragmento'
+      - name: modality
+        dataType: [text]
+        description: 'text | voice | document'
+      - name: timestamp
+        dataType: [date]
+      - name: turn_id
+        dataType: [int]
+  - class: ProcessedTheme
+    description: 'Tema identificado por AG-05 con sus fragmentos soporte'
+    vectorizer: text2vec-palm
+    properties:
+      - name: theme_name
+        dataType: [text]
+      - name: project_id
+        dataType: [text]
+        moduleConfig:
+          text2vec-palm: { skip: true }
+      - name: cycle_id
+        dataType: [int]
+        moduleConfig:
+          text2vec-palm: { skip: true }
+      - name: saturation_state
+        dataType: [text]
+        description: 'SATURADO | EMERGENTE-NO-SATURADO'
+      - name: source_chunk_ids
+        dataType: [text[]]
+      - name: confidence_level
+        dataType: [text]
+        description: 'ALTO | MEDIO | EMERGENTE | INSUFICIENTE'
+  - class: AgentOutput
+    description: 'Output serializado de cualquier agente especialista por ciclo'
+    vectorizer: text2vec-palm
+    properties:
+      - name: agent_id
+        dataType: [text]
+        moduleConfig:
+          text2vec-palm: { skip: true }
+      - name: project_id
+        dataType: [text]
+        moduleConfig:
+          text2vec-palm: { skip: true }
+      - name: cycle_id
+        dataType: [int]
+        moduleConfig:
+          text2vec-palm: { skip: true }
+      - name: output_json
+        dataType: [text]
+        description: 'agent_specific_payload serializado como JSON string'
+        moduleConfig:
+          text2vec-palm: { skip: true }
+      - name: summary_text
+        dataType: [text]
+        description: 'Resumen legible del output para RAG cross-agent'
+      - name: status
+        dataType: [text]
+  - class: ActionItem
+    description: 'Acción validada del Plan de Movilización'
+    vectorizer: text2vec-palm
+    properties:
+      - name: action_text
+        dataType: [text]
+      - name: project_id
+        dataType: [text]
+        moduleConfig:
+          text2vec-palm: { skip: true }
+      - name: okr_objective
+        dataType: [text]
+      - name: horizon
+        dataType: [text]
+        description: '30d | 90d | 180d'
+      - name: validated_by_team
+        dataType: [boolean]
+6. Google Cloud Pub/Sub — Topics y Suscripciones
+El sistema usa 16 topics definidos en DOC-04. Cada topic tiene una o más suscripciones configuradas con dead-letter policy para garantizar que ningún mensaje se pierda silenciosamente.
+  6.1  Configuración de Topics y Suscripciones  
+# Pub/Sub configuration — gcloud commands equivalentes
+# Aplicar via Terraform o scripts de bootstrap
+topics:
+  # Formato: iap.{layer}.{identifier}
+  - name: iap.seed.input
+  - name: iap.channel.inbound
+  - name: iap.channel.outbound
+  - name: iap.val.packet
+  - name: iap.val.to.ag00
+  - name: iap.orchestrator.directive
+  - name: iap.orchestrator.report
+  - name: iap.swarm.ag01
+  - name: iap.swarm.ag02
+  - name: iap.swarm.ag03
+  - name: iap.swarm.ag04
+  - name: iap.swarm.ag05
+  - name: iap.swarm.ag06
+  - name: iap.swarm.ag07
+  - name: iap.swarm.ag08
+  - name: iap.swarm.ag09
+  - name: iap.swarm.output
+  - name: iap.alerts.dead_end
+  - name: iap.alerts.safe_harbor
+  - name: iap.fallback.corpus      # Cola de fallback cuando Vector DB no disponible
+# Dead-letter topic para todos los topics críticos
+  - name: iap.dead.letter
+subscriptions:
+  - name: preprocessor-inbound-sub
+    topic: iap.channel.inbound
+    ackDeadlineSeconds: 120
+    messageRetentionDuration: 604800s   # 7 días
+    retryPolicy:
+      minimumBackoff: 10s
+      maximumBackoff: 600s
+    deadLetterPolicy:
+      deadLetterTopic: iap.dead.letter
+      maxDeliveryAttempts: 5
+  - name: val-packet-sub
+    topic: iap.val.packet
+    ackDeadlineSeconds: 130            # > SLA 120s de VAL
+    messageRetentionDuration: 604800s
+    retryPolicy:
+      minimumBackoff: 5s
+      maximumBackoff: 300s
+    deadLetterPolicy:
+      deadLetterTopic: iap.dead.letter
+      maxDeliveryAttempts: 3
+  - name: val-directive-sub
+    topic: iap.orchestrator.directive
+    ackDeadlineSeconds: 30
+    messageRetentionDuration: 3600s    # 1h: directivas viejas no tienen sentido
+    expirationPolicy:
+      ttl: 3600s                       # Directiva expira si VAL no la aplica en 1h
+  - name: ag00-val-packet-sub
+    topic: iap.val.to.ag00
+    ackDeadlineSeconds: 300
+    messageRetentionDuration: 604800s
+    retryPolicy:
+      minimumBackoff: 15s
+      maximumBackoff: 900s
+    deadLetterPolicy:
+      deadLetterTopic: iap.dead.letter
+      maxDeliveryAttempts: 5
+  - name: ag00-swarm-output-sub
+    topic: iap.swarm.output
+    ackDeadlineSeconds: 60
+    messageRetentionDuration: 604800s
+    retryPolicy:
+      minimumBackoff: 5s
+      maximumBackoff: 120s
+  # Suscripciones de agentes especialistas (patrón idéntico para ag01..ag09)
+  - name: ag01-task-sub
+    topic: iap.swarm.ag01
+    ackDeadlineSeconds: 120
+    messageRetentionDuration: 604800s
+    retryPolicy:
+      minimumBackoff: 10s
+      maximumBackoff: 300s
+    deadLetterPolicy:
+      deadLetterTopic: iap.dead.letter
+      maxDeliveryAttempts: 3
+  # Replicar ag01-task-sub para ag02..ag09 cambiando name y topic
+  - name: channel-outbound-sub
+    topic: iap.channel.outbound
+    ackDeadlineSeconds: 30
+    messageRetentionDuration: 86400s   # 1 día
+    retryPolicy:
+      minimumBackoff: 2s
+      maximumBackoff: 30s
+7. Agent Registry — Infraestructura Completa
+El Agent Registry es una tabla PostgreSQL (agent_registry) expuesta por AGENTE-00 como una API interna. No es un servicio externo independiente: vive dentro del servicio agente00-service. AGENTE-00 la consulta en memoria al arrancar y la actualiza via su propia lógica de registro.
+  7.1  API del Agent Registry (endpoints internos)  
+# Agent Registry API — parte del servicio agente00-service
+# Solo accesible desde la VPC interna. No expuesto a Internet.
+openapi: '3.0.0'
+info:
+  title: DigiKawsay Agent Registry API
+  version: 1.0.0
+paths:
+  /registry/agents:
+    get:
+      summary: Descubre agentes por capabilities (usado por AGENTE-00)
+      parameters:
+        - name: capabilities
+          in: query
+          description: 'Lista CSV de capabilities requeridas. Intersección OR.'
+          example: 'culture_diagnosis,ocai'
+        - name: project_tags
+          in: query
+          description: 'Tag requerido del proyecto activo.'
+          example: 'IAP'
+        - name: active
+          in: query
+          schema: { type: boolean, default: true }
+      responses:
+        '200':
+          description: Lista de AGENT_REGISTRY_ENTRY que cumplen los filtros
+  /registry/agents/{agent_id}:
+    get:
+      summary: Obtiene configuración de un agente específico
+    patch:
+      summary: Actualiza active=true/false de un agente (solo L3 autorizado)
+  /registry/agents/register:
+    post:
+      summary: Registra un nuevo agente (AG-10+)
+      description: |
+        Valida que el payload cumple AgentContractInterface de DOC-03.
+        Verifica que el health_endpoint responde HTTP 200.
+        Inserta en tabla agent_registry.
+        AGENTE-00 incluirá el agente en el próximo ciclo de routing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AGENT_REGISTRY_ENTRY'  # ver DOC-04
+  /registry/agents/{agent_id}/health:
+    get:
+      summary: AGENTE-00 verifica disponibilidad antes de despachar
+      description: Proxy al health_endpoint del agente. Retorna su respuesta.
+  /registry/capabilities:
+    get:
+      summary: Lista todas las capabilities registradas en el sistema
+      description: Usado para validar capabilities_needed del Seed Prompt
+  7.2  Bootstrap del Registry — Seed Data  
+Al desplegar por primera vez, ejecutar el siguiente SQL para cargar los 9 agentes base. Este seed data corresponde al registry_seed de DOC-03.
+-- Bootstrap Agent Registry — ejecutar en Cloud SQL
+-- Reemplazar health_endpoint con URLs reales de Cloud Run post-deploy
+INSERT INTO digikawsay.agent_registry VALUES
+  ('AG-01','Cultura Organizacional',
+   ARRAY['culture_diagnosis','ocai','schein_layers','values_in_use'],
+   ARRAY['IAP','OKR','organizational_transformation'],
+   'iap.swarm.ag01',
+   'https://digikawsay-ag01-HASH-uc.a.run.app/health',
+   '1.0.0','bootstrap','NOW()',true,
+   '{"temperature":0.3,"max_output_tokens":8192}'),
+  ('AG-02','Transformacion Digital',
+   ARRAY['digital_maturity','gap_analysis','resistance_classification'],
+   ARRAY['IAP','digital_transformation','OKR'],
+   'iap.swarm.ag02',
+   'https://digikawsay-ag02-HASH-uc.a.run.app/health',
+   '1.0.0','bootstrap','NOW()',true,
+   '{"temperature":0.3,"max_output_tokens":8192}'),
+  -- ... repetir para AG-03 a AG-09
+  ('AG-08','Analisis Topologico TDA',
+   ARRAY['tda','mapper','hdbscan','persistent_homology'],
+   ARRAY['IAP','OKR','tda'],
+   'iap.swarm.ag08',
+   'https://digikawsay-ag08-HASH-uc.a.run.app/health',
+   '1.0.0','bootstrap','NOW()',true,
+   '{"temperature":0.2,"max_output_tokens":8192}'),
+  ('AG-09','Facilitacion Grafica',
+   ARRAY['visual_synthesis','comic','d3','mermaid','storyboard'],
+   ARRAY['IAP','OKR','facilitation'],
+   'iap.swarm.ag09',
+   'https://digikawsay-ag09-HASH-uc.a.run.app/health',
+   '1.0.0','bootstrap','NOW()',true,
+   '{"temperature":0.65,"max_output_tokens":8192,"gemini_imagen_enabled":false}');
+-- Verificar seed:
+SELECT agent_id, display_name, active, array_length(capabilities,1) AS n_caps
+FROM digikawsay.agent_registry ORDER BY agent_id;
+-- Esperado: 9 filas, todas active=true
+  7.3  Registro de Agente Extensible (AG-10+)  
+Para agregar un agente nuevo sin rediseño, el equipo de fábrica sigue este procedimiento. AGENTE-00 no requiere modificación ni redeploy.
+Implementar el servicio del nuevo agente usando la imagen swarm-agent base con las variables de entorno correctas (ver template Sección 3.6).
+Desplegar el servicio en Cloud Run y obtener la URL del health_endpoint.
+Llamar al endpoint POST /registry/agents/register con el payload AGENT_REGISTRY_ENTRY completo.
+Verificar que /registry/agents/{agent_id}/health retorna HTTP 200.
+En el próximo ciclo IAP donde el Seed Prompt requiera las capabilities del nuevo agente, AGENTE-00 lo incluirá automáticamente en el routing.
+ZERO DOWNTIME:  El registro de un nuevo agente no requiere reinicio de ningún servicio existente. AGENTE-00 lee el Registry en cada ciclo. El nuevo agente solo recibe trabajo cuando el Seed Prompt matchea sus capabilities.
+8. Secret Manager — Variables de Entorno
+# Crear secrets en Google Secret Manager
+# Reemplazar con valores reales en el proceso de onboarding de cada entorno
+gcloud secrets create gemini-api-key \
+  --replication-policy='automatic' \
+  --project=PROJECT_ID
+echo -n 'YOUR_GEMINI_KEY' | \
+  gcloud secrets versions add gemini-api-key --data-file=-
+# IAM: cada service account solo accede a sus secrets
+gcloud secrets add-iam-policy-binding gemini-api-key \
+  --member='serviceAccount:digikawsay-val-sa@PROJECT_ID.iam.gserviceaccount.com' \
+  --role='roles/secretmanager.secretAccessor'
+# Repetir para cada service account: channel-sa, auth-sa,
+# preprocessor-sa, ag00-sa, swarm-sa
+9. Red, IAM y Seguridad
+9.1 Topología de Red
+Todos los servicios Cloud Run desplegados en la misma VPC (digikawsay-vpc).
+Acceso a Internet ÚNICAMENTE desde Channel Layer (recibe webhooks de Telegram) y Auth Service (OAuth flows).
+Cloud SQL accesible solo via Cloud SQL Auth Proxy dentro de la VPC. Sin IP pública.
+Weaviate (self-hosted en Cloud Run) accesible solo desde la VPC interna. Sin exposición externa.
+Pub/Sub accesible vía Private Google Access. Los mensajes no salen de la red de GCP.
+Gemini API y Vertex AI accesibles vía Private Google Access.
+9.2 Service Accounts y Principio de Mínimo Privilegio
+10. Configuración de Escalabilidad
+El sistema está diseñado para soportar 1,000 participantes concurrentes por proyecto (NFR-04 del DOC-01). El diseño stateless de los servicios Cloud Run permite escalar horizontalmente sin coordinación. Los únicos componentes con estado (PostgreSQL, Weaviate) requieren configuración específica para este nivel de concurrencia.
+11. Alertas de Cloud Monitoring
+# alerting_policies.yaml — importar en Cloud Monitoring
+alertPolicies:
+  - displayName: 'VAL SLA Breach Rate > 5%'
+    conditions:
+      - conditionThreshold:
+          filter: 'metric.type=custom.googleapis.com/digikawsay/val_sla_breach_rate'
+          comparison: COMPARISON_GT
+          thresholdValue: 0.05
+          duration: 60s
+    notificationChannels: [ALERT_WEBHOOK_CHANNEL_ID]
+    severity: WARNING
+  - displayName: 'SAFE_HARBOR Activation'
+    conditions:
+      - conditionThreshold:
+          filter: 'metric.type=custom.googleapis.com/digikawsay/safe_harbor_count'
+          comparison: COMPARISON_GT
+          thresholdValue: 0
+          duration: 0s              # Alerta inmediata
+    notificationChannels: [ALERT_WEBHOOK_CHANNEL_ID, L4_EMAIL_CHANNEL_ID]
+    severity: CRITICAL
+  - displayName: 'PII Anonymization Failure'
+    conditions:
+      - conditionThreshold:
+          filter: 'metric.type=custom.googleapis.com/digikawsay/pii_anon_failures'
+          comparison: COMPARISON_GT
+          thresholdValue: 0
+          duration: 0s              # Alerta inmediata — siempre crítico
+    notificationChannels: [ALERT_WEBHOOK_CHANNEL_ID, L5_DPO_CHANNEL_ID]
+    severity: CRITICAL
+  - displayName: 'Pub/Sub Undelivered Messages > 1000'
+    conditions:
+      - conditionThreshold:
+          filter: 'metric.type=pubsub.googleapis.com/subscription/num_undelivered_messages'
+          comparison: COMPARISON_GT
+          thresholdValue: 1000
+          duration: 300s
+    notificationChannels: [ALERT_WEBHOOK_CHANNEL_ID]
+    severity: ERROR
+  - displayName: 'Agent Availability < 7 of 9'
+    conditions:
+      - conditionThreshold:
+          filter: 'metric.type=custom.googleapis.com/digikawsay/active_agents_count'
+          comparison: COMPARISON_LT
+          thresholdValue: 7
+          duration: 120s
+    notificationChannels: [ALERT_WEBHOOK_CHANNEL_ID]
+    severity: ERROR
+  - displayName: 'DEAD_END Alert Emitted'
+    conditions:
+      - conditionThreshold:
+          filter: 'metric.type=custom.googleapis.com/digikawsay/dead_end_alerts'
+          comparison: COMPARISON_GT
+          thresholdValue: 0
+          duration: 0s
+    notificationChannels: [L4_EMAIL_CHANNEL_ID]
+    severity: WARNING          # Metodológico, no técnico — notifica a L4
+12. Google Cloud Storage — Buckets
+PRIVACIDAD CRÍTICA:  El bucket digikawsay-audio-raw es el único lugar del sistema donde pueden existir datos de audio no anonimizados. Tiene retención de 30 días con lifecycle rule de auto-delete. El acceso está restringido exclusivamente a la service account del Preprocessor. Ningún otro servicio tiene permisos sobre este bucket.
+13. Estado del Documento y Anexos
+Anexo A — Nota sobre Kubernetes (si V1 cambia de Cloud Run)
+Si se elige Kubernetes en lugar de Cloud Run, los cambios son exclusivamente en los bloques de la Sección 3. Cada service Cloud Run se convierte en un Deployment + Service + HorizontalPodAutoscaler de Kubernetes. El resto del documento (Pub/Sub, PostgreSQL, Weaviate, GCS, IAM, Agent Registry) no cambia. Los manifiestos K8s equivalentes seguirán el mismo patrón de variables de entorno con SecretKeyRef a Kubernetes Secrets o External Secrets Operator apuntando a Google Secret Manager.
+Anexo B — Nota sobre Redis como LangGraph Checkpointer (si V2 cambia)
+Si se elige Redis (MemoryStore para Redis en GCP), el DigiKawsayState se almacena en Redis en lugar de PostgreSQL. El impacto es: (1) latencia de checkpoint reducida de ~50ms a ~5ms, relevante para conversaciones muy activas; (2) requiere una instancia MemoryStore (tier Standard para HA, mínimo 2GB para MVP); (3) las tablas operacionales (cycles, data_gaps, evidence_trail, agent_registry) permanecen en PostgreSQL sin cambio; (4) en el código de AGENTE-00 y VAL, reemplazar SqliteSaver o PostgresSaver de LangGraph por RedisSaver. La interfaz del checkpointer es la misma; solo cambia la clase de persistencia.
+  AMENDMENT — DOC-05 v3.1.0 — Compensación Distribuida: Outbox Pattern + Idempotency Keys  
+RAZÓN DEL AMENDMENT:  Hallazgo validado: gap de especificación en el mecanismo de compensación entre LangGraph checkpoint (PostgreSQL) y Pub/Sub dispatch. Este amendment añade los mecanismos Outbox Pattern e Idempotency Keys que la fábrica necesita para implementar AGENTE-00 y los agentes especialistas de forma resiliente ante fallos parciales.
+Las secciones anteriores de este documento permanecen vigentes. Este amendment complementa y no reemplaza el contenido original.
+AMENDMENT — Sección 4.2 (adicional): Tablas de Compensación Distribuida
+Las siguientes dos tablas se añaden al schema DDL de PostgreSQL de la Sección 4.2. Son parte del mismo schema 'digikawsay' y deben crearse en el mismo script de bootstrap.
+-- ═══════════════════════════════════════════════════════
+-- TABLAS DE COMPENSACIÓN DISTRIBUIDA (añadir a Sección 4.2)
+-- ═══════════════════════════════════════════════════════
+-- Outbox Pattern: garantiza atomicidad entre LangGraph checkpoint
+-- y Pub/Sub dispatch. AGENTE-00 escribe aquí EN LA MISMA TX que el checkpoint.
+CREATE TABLE digikawsay.outbox (
+  envelope_id   UUID PRIMARY KEY,
+  topic         TEXT NOT NULL,
+  payload_json  JSONB NOT NULL,
+  status        TEXT DEFAULT 'PENDING'
+                CHECK (status IN ('PENDING','DELIVERED','FAILED')),
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  delivered_at  TIMESTAMPTZ,
+  retry_count   INTEGER DEFAULT 0,
+  last_error    TEXT
+);
+CREATE INDEX idx_outbox_pending
+  ON digikawsay.outbox(created_at)
+  WHERE status = 'PENDING';
+-- NOTIFY para que el Outbox Worker reaccione inmediatamente
+-- en lugar de esperar el siguiente poll de 5 segundos.
+CREATE OR REPLACE FUNCTION digikawsay.notify_outbox()
+RETURNS TRIGGER AS $$
+BEGIN
+  PERFORM pg_notify('outbox_pending', NEW.envelope_id::text);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER trg_outbox_notify
+  AFTER INSERT ON digikawsay.outbox
+  FOR EACH ROW EXECUTE FUNCTION digikawsay.notify_outbox();
+-- Idempotency Keys: cada agente especialista registra los
+-- envelope_ids que ya procesó para descartar duplicados de Pub/Sub.
+CREATE TABLE digikawsay.processed_envelopes (
+  agent_id      TEXT NOT NULL,
+  envelope_id   UUID NOT NULL,
+  processed_at  TIMESTAMPTZ DEFAULT NOW(),
+  output_id     UUID,  -- FK lógica a evidence_trail.output_id
+  PRIMARY KEY (agent_id, envelope_id)
+);
+-- Índice para purga periódica (retener 7 días, purgar el resto)
+CREATE INDEX idx_processed_envelopes_age
+  ON digikawsay.processed_envelopes(processed_at);
+-- Cron job de purga (pg_cron o Cloud Scheduler):
+-- DELETE FROM digikawsay.processed_envelopes
+--   WHERE processed_at < NOW() - INTERVAL '7 days';
+AMENDMENT — Sección 3.8: Outbox Worker Service
+El Outbox Worker es un servicio Cloud Run adicional (o Cloud Run Job con schedule) que lee la tabla outbox y publica a Pub/Sub. Es el único componente autorizado a publicar Task Envelopes a los topics del enjambre.
+# outbox-worker — Cloud Run Service
+# Responsabilidad única: leer outbox WHERE status='PENDING'
+# y publicar a Pub/Sub. LISTEN/NOTIFY para reacción inmediata.
+---
+metadata:
+  name: digikawsay-outbox-worker
+  labels:
+    component: outbox-worker
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '1'   # Siempre activo
+        autoscaling.knative.dev/maxScale: '3'   # No necesita escalar mucho
+    spec:
+      timeoutSeconds: 300
+      serviceAccountName: digikawsay-ag00-sa   # Misma SA que AGENTE-00
+      containers:
+        - image: gcr.io/PROJECT_ID/outbox-worker:VERSION
+          resources:
+            limits: { cpu: '0.5', memory: 256Mi }
+            requests: { cpu: '100m', memory: 128Mi }
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: cloud-sql-url, key: latest }
+            - name: OUTBOX_POLL_INTERVAL_SECONDS
+              value: '5'
+            - name: OUTBOX_MAX_RETRIES
+              value: '5'
+            - name: OUTBOX_RETRY_BACKOFF_SECONDS
+              value: '30'
+            - name: OUTBOX_ALERT_PENDING_MINUTES
+              value: '5'
+            - name: GCP_PROJECT_ID
+              value: 'PROJECT_ID'
+# Comportamiento del worker:
+# 1. LISTEN outbox_pending (PostgreSQL NOTIFY)
+# 2. Al recibir notificación O cada 5s:
+#    SELECT * FROM outbox WHERE status='PENDING' ORDER BY created_at LIMIT 50
+# 3. Para cada envelope: Pub/Sub publish(topic, payload_json)
+# 4. Si publish OK: UPDATE outbox SET status='DELIVERED', delivered_at=NOW()
+# 5. Si publish FAIL: UPDATE outbox SET retry_count=retry_count+1, last_error=...
+#    Si retry_count >= 5: SET status='FAILED', emit ALERT
+Impacto en agente00-service (modifica Sección 3.5)
+AGENTE-00 ya NO publica directamente a los topics del enjambre. En su lugar, escribe en outbox dentro de la misma transacción del checkpoint. El siguiente env var debe añadirse a la configuración de agente00-service:
+# Añadir a agente00-service env vars (Sección 3.5):
+- name: DISPATCH_MODE
+  value: 'OUTBOX'   # 'DIRECT' desactiva el Outbox Pattern (solo para testing local)
+- name: OUTBOX_TABLE
+  value: 'digikawsay.outbox'
+IMPORTANTE:  El Outbox Worker debe deployarse ANTES de AGENTE-00 en cualquier despliegue nuevo. Si AGENTE-00 arranca con DISPATCH_MODE=OUTBOX y el Outbox Worker no está activo, los Task Envelopes se acumularán en outbox sin ser entregados.
