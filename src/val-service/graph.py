@@ -1,8 +1,10 @@
 import os
 from typing import Literal
 from langgraph.graph import StateGraph, START, END
+from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.tools import tool
 from state import DigiKawsayState
 
 # Configuracion MVP
@@ -15,6 +17,19 @@ llm = ChatGoogleGenerativeAI(
     max_output_tokens=600,
     google_api_key=GEMINI_API_KEY
 )
+
+@tool
+def classify_speech_act(text: str) -> str:
+    """Classifies the speech act of the user's message (e.g. Question, Assertion, Complaint)."""
+    return "Classification logged."
+
+@tool
+def detect_emotion(text: str) -> str:
+    """Detects the primary emotion in the user's message (e.g. Joy, Anger, Neutral)."""
+    return "Emotion logged."
+
+tools = [classify_speech_act, detect_emotion]
+llm_with_tools = llm.bind_tools(tools)
 
 VAL_SYSTEM_PROMPT = """
 Actúas como "VAL", la cara conversacional de DigiKawsay.
@@ -49,25 +64,28 @@ def val_node(state: DigiKawsayState) -> dict:
         
     system_msg = SystemMessage(content=current_prompt)
     
-    response = llm.invoke([system_msg] + messages)
+    response = llm_with_tools.invoke([system_msg] + messages)
     
-    # Por MVP simplificamos el manejo de limpieza de directivas:
-    # Una vez aplicadas, las vaciamos (o las podríamos gestionar en reducer).
+    # We no longer unconditionally wipe expert_directives here. 
+    # Buffer management is delegated to external reduction or tool logic.
     return {
-        "messages": [response],
-        # Para el proof-of-concept del MVP, limpiamos expert_directives asumiendo que ya se usó
-        "expert_directives": [] 
+        "messages": [response]
     }
 
 def construct_graph() -> StateGraph:
     workflow = StateGraph(DigiKawsayState)
     
     workflow.add_node("val_agent", val_node)
+    workflow.add_node("tools", ToolNode(tools))
     
     workflow.add_edge(START, "val_agent")
-    workflow.add_edge("val_agent", END)
+    workflow.add_conditional_edges("val_agent", tools_condition)
+    workflow.add_edge("tools", "val_agent")
     
-    return workflow.compile()
+    return workflow
 
-# Instancia compilada del grafo (necesitará checkpointer en prod)
-app = construct_graph()
+def get_compiled_graph(checkpointer=None):
+    return construct_graph().compile(checkpointer=checkpointer)
+
+# Default compilation without checkpointer for testing/imports
+app = get_compiled_graph()

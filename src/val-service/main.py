@@ -5,13 +5,20 @@ from concurrent.futures import TimeoutError
 from google.cloud import pubsub_v1
 from langchain_core.messages import HumanMessage, AIMessage
 
-from graph import app  # Compiled LangGraph
-# En un despliegue MVP real, aquí importaríamos el AsyncPostgresSaver para el LangGraph Checkpointer
+from graph import get_compiled_graph
+from langgraph.checkpoint.postgres import PostgresSaver
+from psycopg_pool import ConnectionPool
 
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "my-gcp-project")
 SUBSCRIPTION_NAME = os.getenv("PUBSUB_PACKET_INBOUND_SUB", "val-packet-sub")
 OUTBOUND_TOPIC = os.getenv("PUBSUB_OUTBOUND_TOPIC", "iap.channel.outbound")
 SUPERVISOR_TOPIC = os.getenv("PUBSUB_VAL_TO_AG00_TOPIC", "iap.val.to.ag00")
+
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/digikawsay")
+
+# Global pool and compiled graph app
+pool = None
+app = None
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -77,6 +84,20 @@ def process_dialogue_packet(message: pubsub_v1.subscriber.message.Message):
         message.nack()
 
 def main():
+    global pool, app
+    
+    logger.info("Conectando al Checkpointer in Postgres...")
+    pool = ConnectionPool(
+        conninfo=DATABASE_URL,
+        max_size=10,
+        kwargs={"autocommit": True}
+    )
+    
+    # Initialize checkpointer and auto-run setup (creates langgraph schemas)
+    checkpointer = PostgresSaver(pool)
+    checkpointer.setup()
+    app = get_compiled_graph(checkpointer=checkpointer)
+    
     logger.info(f"VAL Agent escuchando en sub: {subscription_path}")
     streaming_pull_future = subscriber.subscribe(subscription_path, callback=process_dialogue_packet)
     

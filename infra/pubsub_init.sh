@@ -76,4 +76,10 @@ gcloud pubsub subscriptions create channel-outbound-sub \
     --max-retry-delay=30s \
     --project="$PROJECT_ID" || true
 
+echo "Configurando suscripción ag05-inbound-sub..."
+gcloud pubsub subscriptions create ag05-inbound-sub \
+    --topic=iap.val.packet \
+    --ack-deadline=60 \
+    --project="$PROJECT_ID" || true
+
 echo "¡Pub/Sub inicializado correctamente! (Se ha omitido el enjambre de AG-01 a AG-09 para el MVP)"

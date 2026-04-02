@@ -4,15 +4,20 @@ import os
 import json
 import logging
 from datetime import datetime
+import requests
 
 # Configuración
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "my-gcp-project")
 PUBSUB_TOPIC = os.getenv("PUBSUB_INBOUND_TOPIC", "iap.channel.inbound")
+PUBSUB_OUTBOUND_SUB = os.getenv("PUBSUB_OUTBOUND_SUB", "channel-outbound-sub")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 app = FastAPI(title="DigiKawsay Channel Layer")
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(PROJECT_ID, PUBSUB_TOPIC)
+
+subscriber = pubsub_v1.SubscriberClient()
+outbound_sub_path = subscriber.subscription_path(PROJECT_ID, PUBSUB_OUTBOUND_SUB)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -58,6 +63,32 @@ async def telegram_webhook(request: Request):
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "service": "channel-layer"}
+
+def process_outbound_msg(message):
+    try:
+        packet = json.loads(message.data.decode("utf-8"))
+        participant_id = packet.get("participant_id")
+        text = packet.get("text")
+        
+        if TELEGRAM_BOT_TOKEN and participant_id:
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+            payload = {"chat_id": participant_id, "text": text}
+            response = requests.post(url, json=payload)
+            response.raise_for_status()
+            logger.info(f"Sent reply to Telegram chat {participant_id}")
+        else:
+            logger.warning(f"No TELEGRAM_BOT_TOKEN set, or no participant_id. Mock sent: {text}")
+            
+        message.ack()
+    except Exception as e:
+        logger.error(f"Error processing outbound message to Telegram: {e}")
+        message.nack()
+
+@app.on_event("startup")
+def startup_event():
+    # Start the subscriber. It runs on a background thread pool automatically.
+    logger.info(f"Starting Pub/Sub subscriber on {outbound_sub_path}")
+    subscriber.subscribe(outbound_sub_path, callback=process_outbound_msg)
 
 if __name__ == "__main__":
     import uvicorn
