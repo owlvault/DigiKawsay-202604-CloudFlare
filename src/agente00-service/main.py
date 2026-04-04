@@ -18,6 +18,14 @@ app = FastAPI(title="AGENTE-00 Supervisor", version="1.0.0 (MVP)")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+from google.cloud import pubsub_v1
+PROJECT_ID = os.getenv("GCP_PROJECT_ID", "my-gcp-project")
+SWARM_AG05_TOPIC = os.getenv("PUBSUB_SWARM_AG05_TOPIC", "iap.swarm.ag05")
+try:
+    publisher = pubsub_v1.PublisherClient()
+except Exception:
+    publisher = None
+
 class DirectivePayload(BaseModel):
     participant_id: str
     project_id: str
@@ -112,11 +120,34 @@ def handle_val_report(request: dict):
     Actualiza métricas de ciclo.
     """
     try:
-        logger.info(f"Reporte de VAL recibido: {request}")
-        # Lógica para registrar el N_Turnos y evaluar Saturation_Index simulada...
+        if "message" in request and "data" in request["message"]:
+            import base64
+            payload = json.loads(base64.b64decode(request["message"]["data"]).decode('utf-8'))
+        else:
+            payload = request
+
+        logger.info(f"Reporte de VAL recibido: {payload}")
+        
+        turn_count = payload.get("turn_count", 0)
+        
+        # Despachar a AG-05 si turn_count >= 2
+        if turn_count >= 2 and publisher:
+            logger.info("Enviando paquete a AG-05 (Methodologist)")
+            task_envelope = {
+                "message_id": str(uuid.uuid4()),
+                "participant_id": payload.get("participant_id"),
+                "clean_text": "Conversation context requires methodology analysis.",
+                "emotion": payload.get("emotional_register"),
+                "topics": payload.get("topics", [])
+            }
+            publisher.publish(
+                publisher.topic_path(PROJECT_ID, SWARM_AG05_TOPIC),
+                json.dumps(task_envelope).encode("utf-8")
+            )
+            
         return {"status": "acknowledged"}
     except Exception as e:
-        logger.error("Error validando el reporte de VAL")
+        logger.error(f"Error validando el reporte de VAL: {e}")
         raise HTTPException(status_code=400, detail="Bad reporting format")
 
 @app.get("/health")

@@ -23,6 +23,8 @@ TOPICS=(
     "iap.val.to.ag00"
     "iap.orchestrator.directive"
     "iap.alerts.safe_harbor"
+    "iap.swarm.ag05"
+    "iap.swarm.output"
 )
 
 for topic in "${TOPICS[@]}"; do
@@ -76,10 +78,16 @@ gcloud pubsub subscriptions create channel-outbound-sub \
     --max-retry-delay=30s \
     --project="$PROJECT_ID" || true
 
-echo "Configurando suscripción ag05-inbound-sub..."
-gcloud pubsub subscriptions create ag05-inbound-sub \
-    --topic=iap.val.packet \
+echo "Configurando suscripción ag05-swarm-sub..."
+gcloud pubsub subscriptions create ag05-swarm-sub \
+    --topic=iap.swarm.ag05 \
     --ack-deadline=60 \
     --project="$PROJECT_ID" || true
 
-echo "¡Pub/Sub inicializado correctamente! (Se ha omitido el enjambre de AG-01 a AG-09 para el MVP)"
+echo "Configurando suscripción ag00-swarm-output-sub..."
+gcloud pubsub subscriptions create ag00-swarm-output-sub \
+    --topic=iap.swarm.output \
+    --ack-deadline=60 \
+    --project="$PROJECT_ID" || true
+
+echo "¡Pub/Sub inicializado correctamente! (Se ha omitido el resto del enjambre para el MVP)"

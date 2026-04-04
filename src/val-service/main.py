@@ -66,11 +66,17 @@ def process_dialogue_packet(message: pubsub_v1.subscriber.message.Message):
             json.dumps(outbound_msg).encode("utf-8")
         )
         
+        dstates = output.get("dialogue_states", {})
+        current_state = dstates.get(participant_id, {})
+        emotion = current_state.get("emotional_register", "Neutral")
+        
         # 6. Notificar al supervisor (AG-00) del ciclo completado
         ag00_report = {
             "event": "TURN_COMPLETED",
             "participant_id": participant_id,
-            "turn_count": len(output["messages"]) // 2 # Estimación burda
+            "turn_count": len(output["messages"]) // 2, # Estimación burda
+            "emotional_register": emotion,
+            "topics": current_state.get("topics_covered", [])
         }
         publisher.publish(
             publisher.topic_path(PROJECT_ID, SUPERVISOR_TOPIC),

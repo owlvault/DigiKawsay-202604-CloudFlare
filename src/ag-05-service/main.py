@@ -8,26 +8,33 @@ from datetime import datetime
 
 # Configuración
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "my-gcp-project")
-SUBSCRIPTION_NAME = os.getenv("PUBSUB_AG05_INBOUND_SUB", "ag05-inbound-sub")
-# Para el MVP, el agente puede escuchar directo al preprocesador o a un tópico del enjambre
-INBOUND_TOPIC = os.getenv("PUBSUB_SWARM_INBOUND_TOPIC", "iap.val.packet") 
+SUBSCRIPTION_NAME = os.getenv("PUBSUB_AG05_INBOUND_SUB", "ag05-swarm-sub")
+INBOUND_TOPIC = os.getenv("PUBSUB_SWARM_INBOUND_TOPIC", "iap.swarm.ag05") 
+OUTBOUND_TOPIC = os.getenv("PUBSUB_SWARM_OUTPUT_TOPIC", "iap.swarm.output")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("AG-05-Methodologist")
 
 subscriber = pubsub_v1.SubscriberClient()
 subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
+publisher = pubsub_v1.PublisherClient()
 
 def insight_reducer(agent_output: dict):
     """
-    Simula la reducción de insights. En lugar de un tópico de salida,
-    por ser un MVP PoC validamos que el output cumple con el formato
-    y lo logueamos listos para escalar a AGENTE-00.
+    Simula la reducción de insights y publica a la salida del enjambre.
     """
     logger.info(f"Insight Reducer: Procesando output '{agent_output.get('agent_id')}'")
-    # Formateo visual del insight
     logger.info(f"REPORTE CUALITATIVO: {agent_output.get('payload')}")
-    # Aquí podríamos publicar a 'iap.swarm.output' para que AG-00 lo junte con otros.
+    
+    # Publicar a 'iap.swarm.output'
+    try:
+        publisher.publish(
+            publisher.topic_path(PROJECT_ID, OUTBOUND_TOPIC),
+            json.dumps(agent_output).encode("utf-8")
+        )
+        logger.info(f"Insight publicado en {OUTBOUND_TOPIC}")
+    except Exception as e:
+        logger.error(f"Fallo publicando insight: {e}")
 
 def process_task_envelope(message: pubsub_v1.subscriber.message.Message):
     """
