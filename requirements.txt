@@ -11,6 +11,7 @@ langgraph>=0.0.69
 
 # GCP / PubSub
 google-cloud-pubsub>=2.21.3
+google-cloud-secret-manager>=2.20.0
 
 # Checkpointing
 langgraph-checkpoint-postgres>=2.0.0

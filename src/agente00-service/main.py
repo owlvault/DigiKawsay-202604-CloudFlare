@@ -48,9 +48,17 @@ def admin_ui():
             <textarea name="content" rows="4" required style="width: 300px;"></textarea><br><br>
             <input type="submit" value="Inyectar en LangGraph State">
         </form>
+        <br><hr><br>
+        <h3>Configuración</h3>
+        <a href='/admin/setup-wizard' style='display:inline-block; padding: 10px 20px; background-color: #8b5cf6; color: white; text-decoration: none; border-radius: 8px;'>🔧 Setup Telegram Bot Wizard</a>
     </body>
     </html>
     """
+
+@app.get("/admin/setup-wizard", response_class=HTMLResponse)
+def setup_wizard():
+    with open("templates/setup_wizard.html", "r", encoding="utf-8") as f:
+        return f.read()
 
 @app.post("/admin/inject_directive_form")
 def inject_directive_form(participant_id: str = Form(...), content: str = Form(...)):

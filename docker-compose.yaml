@@ -108,7 +108,7 @@ services:
       - ./src/val-service:/app
     working_dir: /app
     command: >
-      bash -c "pip install google-cloud-pubsub langchain-google-genai langgraph psycopg2-binary psycopg psycopg_pool langgraph-checkpoint-postgres && python main.py"
+      bash -c "pip install google-cloud-pubsub google-cloud-secret-manager langchain-google-genai langgraph psycopg-binary psycopg psycopg_pool langgraph-checkpoint-postgres && python main.py"
 
   agente00-service:
     image: python:3.11-slim
@@ -126,7 +126,7 @@ services:
       - ./src/agente00-service:/app
     working_dir: /app
     command: >
-      bash -c "pip install fastapi uvicorn pydantic psycopg2-binary && uvicorn main:app --host 0.0.0.0 --port 8000"
+      bash -c "pip install fastapi uvicorn pydantic psycopg2-binary python-multipart google-cloud-pubsub && uvicorn main:app --host 0.0.0.0 --port 8000"
 
   ag-05-service:
     image: python:3.11-slim

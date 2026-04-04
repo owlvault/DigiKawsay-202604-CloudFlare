@@ -1,0 +1,12 @@
+﻿{
+  "ok": true,
+  "result": {
+    "url": "https://nonguidable-stanford-unsurmised.ngrok-free.dev/webhook",
+    "has_custom_certificate": false,
+    "pending_update_count": 4,
+    "last_error_date": 1775181022,
+    "last_error_message": "Wrong response from the webhook: 404 Not Found",
+    "max_connections": 40,
+    "ip_address": "18.192.31.165"
+  }
+}

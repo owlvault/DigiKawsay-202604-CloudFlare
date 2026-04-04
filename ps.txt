@@ -1,0 +1,10 @@
+﻿NAME                      IMAGE                                                COMMAND                  SERVICE            CREATED             STATUS                          PORTS
+digikawsay-ag05           python:3.11-slim                                     "bash -c 'pip instalÔÇª"   ag-05-service      About an hour ago   Exited (0) 7 minutes ago        
+digikawsay-agente00       python:3.11-slim                                     "bash -c 'pip instalÔÇª"   agente00-service   50 minutes ago      Up 50 minutes                   0.0.0.0:8002->8000/tcp, [::]:8002->8000/tcp
+digikawsay-channel        python:3.11-slim                                     "bash -c 'pip instalÔÇª"   channel-layer      7 minutes ago       Up 7 minutes                    0.0.0.0:8001->8080/tcp, [::]:8001->8080/tcp
+digikawsay-postgres       postgres:15-alpine                                   "docker-entrypoint.sÔÇª"   postgres           About an hour ago   Up About an hour (healthy)      0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+digikawsay-preprocessor   python:3.11-slim                                     "bash -c 'pip instalÔÇª"   preprocessor       About an hour ago   Exited (0) 7 minutes ago        
+digikawsay-pubsub         gcr.io/google.com/cloudsdktool/cloud-sdk:emulators   "gcloud beta emulatoÔÇª"   pubsub-emulator    About an hour ago   Up About an hour                0.0.0.0:8085->8085/tcp, [::]:8085->8085/tcp
+digikawsay-pubsub-init    gcr.io/google.com/cloudsdktool/cloud-sdk:latest      "bash -c 'sleep 10 &ÔÇª"   pubsub-init        About an hour ago   Exited (0) About a minute ago   
+digikawsay-val            python:3.11-slim                                     "bash -c 'pip instalÔÇª"   val-service        2 minutes ago       Exited (0) About a minute ago   
+digikawsay-weaviate       semitechnologies/weaviate:1.24.4                     "/bin/weaviate --hosÔÇª"   weaviate           About an hour ago   Up About an hour                0.0.0.0:50051->50051/tcp, [::]:50051->50051/tcp, 0.0.0.0:8081->8080/tcp, [::]:8081->8080/tcp

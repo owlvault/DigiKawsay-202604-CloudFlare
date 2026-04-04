@@ -1,0 +1,100 @@
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:__main__:VAL - Procesando request de participante 7164398199
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:__main__:VAL - Procesando request de participante 7164398199
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:__main__:VAL - Procesando request de participante 7164398199
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:__main__:VAL - Procesando request de participante 7164398199
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:__main__:VAL - Procesando request de participante 7164398199
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
+ERROR:__main__:Error procesando packet en VAL: Error calling model 'gemini-1.5-pro-latest' (NOT_FOUND): 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-pro-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
+INFO:__main__:VAL - Procesando request de participante 7164398199
+INFO:httpx:HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent "HTTP/1.1 404 Not Found"
