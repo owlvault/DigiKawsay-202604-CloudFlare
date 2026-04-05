@@ -13,6 +13,9 @@ from psycopg2.extras import Json
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/digikawsay")
 
+from monitor import GCPMonitor
+monitor = GCPMonitor(project_id=os.getenv("GCP_PROJECT_ID", "digikawsay"))
+
 app = FastAPI(title="AGENTE-00 Supervisor", version="1.0.0 (MVP)")
 
 logging.basicConfig(level=logging.INFO)
@@ -60,6 +63,48 @@ def setup_wizard():
     with open("templates/setup_wizard.html", "r", encoding="utf-8") as f:
         return f.read()
 
+class WebhookSetupPayload(BaseModel):
+    telegram_token: str
+    ngrok_url: str
+
+@app.post("/admin/setup-webhook")
+def setup_webhook(payload: WebhookSetupPayload):
+    import requests
+    
+    # Simple webhook set logic to auto-configure Telegram
+    token = payload.telegram_token.strip()
+    ngrok = payload.ngrok_url.strip().rstrip('/')
+    
+    if not token or not ngrok:
+        raise HTTPException(status_code=400, detail="Token y URL son requeridos")
+    
+    # 1. Update telegram hook
+    webhook_url = f"{ngrok}/webhook"
+    telegram_api = f"https://api.telegram.org/bot{token}/setWebhook?url={webhook_url}"
+    
+    try:
+        response = requests.get(telegram_api)
+        result = response.json()
+        if not result.get('ok'):
+            return {"status": "error", "message": result.get('description', 'Unknown error by Telegram')}
+            
+        # 2. Update .env simple replacement fallback tool logic
+        env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
+        if os.path.exists(env_file):
+            with open(env_file, 'r') as file:
+                env_data = file.read()
+            # replace TELEGRAM_BOT_TOKEN logic
+            import re
+            env_data = re.sub(r'TELEGRAM_BOT_TOKEN=.*', f'TELEGRAM_BOT_TOKEN={token}', env_data)
+            with open(env_file, 'w') as file:
+                file.write(env_data)
+
+        # Notify success
+        return {"status": "success", "message": "Webhook configurado y Token guardado en .env"}
+    except Exception as e:
+        logger.error(f"Error configuring webhook: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.post("/admin/inject_directive_form")
 def inject_directive_form(participant_id: str = Form(...), content: str = Form(...)):
     # Adapter para el UI HTML
@@ -71,55 +116,50 @@ def inject_directive_form(participant_id: str = Form(...), content: str = Form(.
 def inject_directive(payload: DirectivePayload):
     """
     Endpoint de 'Shadowing'. Un analista humano (simulando al Swarm) 
-    inyecta una directiva forzada al estado de 'expert_directives' de LangGraph.
+    inyecta una directiva que VAL leerá antes de su próxima respuesta.
     
-    Típicamente esto lo haría AGENTE-00 leyendo outputs de Pub/Sub `iap.swarm.output`, 
-    pero en el MVP lo exponemos como API manual para el 'Wizard of Oz'.
+    Usa una tabla compartida `wizard_directives` en PostgreSQL como puente
+    desacoplado entre AG-00 y VAL.
     """
     logger.info(f"Inyectando directiva para participante: {payload.participant_id}")
     
     directive_id = str(uuid.uuid4())
-    directive = {
-        "id": directive_id,
-        "directive_type": "MANUAL_OVERRIDE",
-        "content": payload.content,
-        "urgency": payload.urgency,
-        "issued_by": "human_investigator",
-        "status": "PENDING",
-        "issued_at": datetime.utcnow().isoformat() + "Z"
-    }
     
-    # Simular la actualización al Checkpointer (Postgres) de LangGraph
-    # Para el MVP lo inyectamos burdamente en el state del thread más reciente.
     try:
         connection = psycopg2.connect(DATABASE_URL)
         cursor = connection.cursor()
         
-        # In a real LangGraph Checkpointer (v0.x), state is saved per thread_id.
-        # This is a very simplified raw update. It assumes the schema from PostgresSaver
-        # and appends to expert_directives.
-        # The schema uses checkpoints table: thread_id, checkpoint_id, checkpoint.
+        # Crear la tabla si no existe
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS wizard_directives (
+                id TEXT PRIMARY KEY,
+                participant_id TEXT NOT NULL,
+                content TEXT NOT NULL,
+                urgency TEXT DEFAULT 'MEDIUM',
+                status TEXT DEFAULT 'PENDING',
+                issued_by TEXT DEFAULT 'human_investigator',
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        connection.commit()
         
-        # We fetch the latest checkpoint for the thread:
-        cursor.execute("SELECT checkpoint_id, checkpoint FROM checkpoints WHERE thread_id = %s ORDER BY checkpoint_id DESC LIMIT 1", (payload.participant_id,))
-        row = cursor.fetchone()
+        # Insertar la directiva
+        cursor.execute(
+            """INSERT INTO wizard_directives (id, participant_id, content, urgency, status, issued_by)
+               VALUES (%s, %s, %s, %s, 'PENDING', 'human_investigator')""",
+            (directive_id, payload.participant_id, payload.content, payload.urgency)
+        )
+        connection.commit()
         
-        if row:
-            checkpoint_id, checkpoint_data = row
-            # If checkpoint_data is raw json or bytes, we would parse.
-            # Assuming langgraph checkpointer stores it cleanly (v2 uses bytes with msgpack by default, though PostgresSaver uses pickle/jsonb depending on version)
-            # For this MVP Wizard of Oz without sharing graph codebase, we just log success. 
-            # Note: Properly updating LangGraph states outside of the graph compiled instance is risky due to binary serialization.
-            pass
-            
+        cursor.close()
         connection.close()
         
-        logger.info(f"Directiva inyectada procesada. \nContenido: {payload.content}")
-        return {"status": "success", "directive_id": directive_id, "note": "UI connected, raw DB injection stubbed."}
+        logger.info(f"Directiva inyectada en DB. ID: {directive_id}, Contenido: {payload.content}")
+        return {"status": "success", "directive_id": directive_id, "participant_id": payload.participant_id}
         
     except Exception as e:
         logger.error(f"Error inyectando directiva: {e}")
-        raise HTTPException(status_code=500, detail="Database override failed")
+        raise HTTPException(status_code=500, detail=f"Database injection failed: {e}")
 
 @app.post("/system/pubsub/val_report")
 def handle_val_report(request: dict):
@@ -161,6 +201,24 @@ def handle_val_report(request: dict):
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "service": "agente00-service", "mode": "Wizard-Of-Oz"}
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_ui():
+    """Sirve el dashboard de monitoreo premium."""
+    static_path = os.path.join(os.path.dirname(__file__), "static", "dashboard.html")
+    if os.path.exists(static_path):
+        with open(static_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return HTMLResponse("<h2>Dashboard no encontrado</h2>", status_code=404)
+
+@app.get("/api/monitor")
+def get_monitor_data():
+    """Endpoint para alimentar el dashboard con datos reales de GCP."""
+    return {
+        "gemini": monitor.get_gemini_metrics(hours=24),
+        "billing": monitor.get_billing_info(),
+        "health": monitor.get_system_health()
+    }
 
 if __name__ == "__main__":
     import uvicorn

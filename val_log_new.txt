@@ -1,0 +1,15 @@
+Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+Downloading pycparser-3.0-py3-none-any.whl (48 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 48.2/48.2 kB 455.1 kB/s eta 0:00:00
+Installing collected packages: filetype, zstandard, zipp, xxhash, websockets, uuid-utils, urllib3, typing-extensions, tenacity, sniffio, pyyaml, pycparser, pyasn1, psycopg2-binary, psycopg-binary, protobuf, packaging, ormsgpack, orjson, jsonpointer, idna, h11, distro, charset_normalizer, certifi, annotated-types, typing-inspection, requests, pydantic-core, pyasn1-modules, psycopg_pool, psycopg, proto-plus, jsonpatch, importlib-metadata, httpcore, grpcio, googleapis-common-protos, cffi, anyio, requests-toolbelt, pydantic, opentelemetry-api, httpx, grpcio-status, cryptography, opentelemetry-semantic-conventions, langsmith, langgraph-sdk, grpc-google-iam-v1, google-auth, opentelemetry-sdk, langchain-core, google-api-core, langgraph-checkpoint, google-genai, langgraph-prebuilt, langgraph-checkpoint-postgres, langchain-google-genai, google-cloud-secret-manager, google-cloud-pubsub, langgraph
+Successfully installed annotated-types-0.7.0 anyio-4.13.0 certifi-2026.2.25 cffi-2.0.0 charset_normalizer-3.4.7 cryptography-46.0.6 distro-1.9.0 filetype-1.2.0 google-api-core-2.30.2 google-auth-2.49.1 google-cloud-pubsub-2.36.0 google-cloud-secret-manager-2.27.0 google-genai-1.70.0 googleapis-common-protos-1.74.0 grpc-google-iam-v1-0.14.4 grpcio-1.80.0 grpcio-status-1.80.0 h11-0.16.0 httpcore-1.0.9 httpx-0.28.1 idna-3.11 importlib-metadata-8.7.1 jsonpatch-1.33 jsonpointer-3.1.1 langchain-core-1.2.26 langchain-google-genai-4.2.1 langgraph-1.1.6 langgraph-checkpoint-4.0.1 langgraph-checkpoint-postgres-3.0.5 langgraph-prebuilt-1.0.9 langgraph-sdk-0.3.12 langsmith-0.7.25 opentelemetry-api-1.40.0 opentelemetry-sdk-1.40.0 opentelemetry-semantic-conventions-0.61b0 orjson-3.11.8 ormsgpack-1.12.2 packaging-26.0 proto-plus-1.27.2 protobuf-6.33.6 psycopg-3.3.3 psycopg-binary-3.3.3 psycopg2-binary-2.9.11 psycopg_pool-3.3.0 pyasn1-0.6.3 pyasn1-modules-0.4.2 pycparser-3.0 pydantic-2.12.5 pydantic-core-2.41.5 pyyaml-6.0.3 requests-2.33.1 requests-toolbelt-1.0.0 sniffio-1.3.1 tenacity-9.1.4 typing-extensions-4.15.0 typing-inspection-0.4.2 urllib3-2.6.3 uuid-utils-0.14.1 websockets-16.0 xxhash-3.6.0 zipp-3.23.0 zstandard-0.25.0
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 24.0 -> 26.0.1
+[notice] To update, run: pip install --upgrade pip
+INFO:__main__:Inicializando LLM de VAL...
+INFO:graph:API Key obtenida desde Secret Manager.
+INFO:graph:LLM inicializado: modelo=gemini-2.5-flash, max_tokens=300
+INFO:__main__:Conectando al Checkpointer en Postgres...
+INFO:__main__:VAL Agent escuchando en sub: projects/digikawsay/subscriptions/val-packet-sub
+INFO:__main__:VAL Agent escuchando directivas en: projects/digikawsay/subscriptions/val-directive-sub

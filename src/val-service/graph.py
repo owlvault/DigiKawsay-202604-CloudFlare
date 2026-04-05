@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Configuración de modelo (Model Tiering — Gemini Flash para VAL)
 # ---------------------------------------------------------------------------
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Variables de módulo — se inicializan en initialize_llm()
 _api_key: str | None = None
@@ -37,7 +37,7 @@ def get_api_key() -> str:
     try:
         from google.cloud import secretmanager
 
-        project_id = os.getenv("GCP_PROJECT_ID", "my-gcp-project")
+        project_id = os.getenv("GCP_PROJECT_ID", "digikawsay")
         client = secretmanager.SecretManagerServiceClient()
         secret_name = f"projects/{project_id}/secrets/gemini-api-key/versions/latest"
         response = client.access_secret_version(request={"name": secret_name})

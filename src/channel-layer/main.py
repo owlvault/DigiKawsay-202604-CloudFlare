@@ -10,7 +10,7 @@ import requests
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "my-gcp-project")
 PUBSUB_TOPIC = os.getenv("PUBSUB_INBOUND_TOPIC", "iap.channel.inbound")
 PUBSUB_OUTBOUND_SUB = os.getenv("PUBSUB_OUTBOUND_SUB", "channel-outbound-sub")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 
 app = FastAPI(title="DigiKawsay Channel Layer")
 publisher = pubsub_v1.PublisherClient()

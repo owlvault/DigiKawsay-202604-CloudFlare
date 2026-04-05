@@ -238,41 +238,27 @@
         <p>Copia el token real que te otorguen. ¡No lo compartas con nadie!</p>
     </div>
 
-    <!-- Step 2 -->
+    <!-- Step 2 & 3 Interactive -->
     <div class="step" id="step-2">
         <h2>Paso 2: Configurarlo en el Sistema</h2>
-        <p>Dirígete a la raíz del repositorio de DigiKawsay en tu servidor y abre el archivo <code>.env</code> (si no existe, créalo). Pega tu Token en la variable <code>TELEGRAM_BOT_TOKEN</code>.</p>
+        <p>Pega tu Telegram Token a continuación:</p>
 
-        <div class="code-block">
-            <button class="copy-btn" onclick="copyText('env-example')">Copiar</button>
-            <span id="env-example">TELEGRAM_BOT_TOKEN="Pega_Aqui_El_Token_Real"</span>
-        </div>
-        
-        <p>A continuación, asegúrate de reiniciar los servicios para que <em>channel-layer</em> tome el nuevo token.</p>
-        <div class="code-block">
-            <button class="copy-btn" onclick="copyText('docker-example')">Copiar</button>
-            <span id="docker-example">docker-compose restart channel-layer</span>
+        <div class="code-block" style="display: flex; gap: 10px;">
+            <input type="text" id="input-token" style="flex: 1; background: transparent; border: none; color: white; outline: none; font-family: monospace;" placeholder="Ej: 1234567890:AAH_XxYyZz1234...">
         </div>
     </div>
 
     <!-- Step 3 -->
     <div class="step" id="step-3">
         <h2>Paso 3: Establecer el Webhook</h2>
-        <p>Finalmente, debemos enlazar los servidores de Telegram con el <em>channel-layer</em> (ejecutándose en local). Puedes utilizar <a href="https://ngrok.com/" target="_blank">Ngrok</a> para exponer el puerto 8001 al mundo:</p>
+        <p>Asegúrate de que Ngrok esté corriendo. Pega tu enlace HTTPS generado por Ngrok a continuación para automatizar la conexión:</p>
         
-        <div class="code-block">
-            <button class="copy-btn" onclick="copyText('ngrok-example')">Copiar</button>
-            <span id="ngrok-example">ngrok http 8001</span>
+        <div class="code-block" style="display: flex; gap: 10px;">
+            <input type="text" id="input-ngrok" style="flex: 1; background: transparent; border: none; color: white; outline: none; font-family: monospace;" placeholder="Ej: https://abc-123.ngrok-free.app">
         </div>
 
-        <p>Copia el enlace HTTPS que Ngrok genera. Posteriormente, en otra terminal envía el siguiente request a la API de Telegram con tu URL y tu Token, apuntando al endpoint <code>/webhook</code>:</p>
-        
-        <div class="code-block">
-            <button class="copy-btn" onclick="copyText('curl-example')">Copiar</button>
-            <span id="curl-example">curl -F "url=https://[TU_NGROK_URL]/webhook" https://api.telegram.org/bot[TELEGRAM_BOT_TOKEN]/setWebhook</span>
-        </div>
-
-        <p>Si recibes un <code>{"ok":true,"result":true,"description":"Webhook was set"}</code>, ¡Todo listo! VAL ya puede interactuar con Telegram.</p>
+        <p><button onclick="applyWebhook()" style="background: var(--success); color: white; width: 100%;">Aplicar y Configurar Automáticamente</button></p>
+        <p id="status-message" style="color: yellow; text-align: center; display: none;"></p>
     </div>
 
     <div class="controls">
@@ -311,6 +297,43 @@
         } else {
             nextBtn.innerText = "Siguiente";
             nextBtn.onclick = () => navigate(1);
+        }
+    }
+
+    async function applyWebhook() {
+        const token = document.getElementById('input-token').value;
+        const ngrok = document.getElementById('input-ngrok').value;
+        const msg = document.getElementById('status-message');
+
+        if(!token || !ngrok) {
+            msg.innerText = "Por favor completa ambos campos.";
+            msg.style.display = 'block';
+            msg.style.color = "red";
+            return;
+        }
+
+        msg.innerText = "Configurando... esto tomará unos segundos.";
+        msg.style.color = "yellow";
+        msg.style.display = 'block';
+
+        try {
+            const res = await fetch('/admin/setup-webhook', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({telegram_token: token, ngrok_url: ngrok})
+            });
+            const data = await res.json();
+            
+            if(data.status === 'success') {
+                msg.innerText = "¡Configuración Exitosa! Ya puedes usar Telegram.";
+                msg.style.color = "#10b981"; // green
+            } else {
+                msg.innerText = "Fallo: " + data.message;
+                msg.style.color = "red";
+            }
+        } catch(e) {
+            msg.innerText = "Error de red al intentar configurar.";
+            msg.style.color = "red";
         }
     }
 

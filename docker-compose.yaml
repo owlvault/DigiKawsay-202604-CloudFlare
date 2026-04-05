@@ -51,9 +51,11 @@ services:
       - pubsub-emulator
     environment:
       PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+      CLOUDSDK_AUTH_DISABLE_CREDENTIALS: 1
+      CLOUDSDK_CORE_PROJECT: digikawsay
     volumes:
       - ./infra/pubsub_init.sh:/scripts/pubsub_init.sh
-    entrypoint: [ "bash", "-c", "sleep 10 && bash /scripts/pubsub_init.sh my-local-project" ]
+    entrypoint: [ "bash", "-c", "sleep 10 && bash /scripts/pubsub_init.sh digikawsay" ]
 
   # -- Microservicios de DigiKawsay -- 
   # (Requieren construir una imagen base de python, usar 'python:3.11-slim' en producción.
@@ -68,7 +70,7 @@ services:
       - "8001:8080"
     environment:
       PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
-      GCP_PROJECT_ID: my-local-project
+      GCP_PROJECT_ID: digikawsay
       PUBSUB_INBOUND_TOPIC: iap.channel.inbound
       TELEGRAM_BOT_TOKEN: $TELEGRAM_BOT_TOKEN
     volumes:
@@ -85,7 +87,7 @@ services:
       - weaviate
     environment:
       PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
-      GCP_PROJECT_ID: my-local-project
+      GCP_PROJECT_ID: digikawsay
       WEAVIATE_URL: http://weaviate:8080
     volumes:
       - ./src/preprocessor:/app
@@ -101,14 +103,16 @@ services:
       - postgres
     environment:
       PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
-      GCP_PROJECT_ID: my-local-project
+      GCP_PROJECT_ID: digikawsay
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/val-sa-key.json
       GEMINI_API_KEY: $GEMINI_API_KEY
       DATABASE_URL: postgres://digikawsay_app:local_password_123@postgres:5432/digikawsay
     volumes:
       - ./src/val-service:/app
+      - ./infra/val-sa-key.json:/secrets/val-sa-key.json:ro
     working_dir: /app
     command: >
-      bash -c "pip install google-cloud-pubsub google-cloud-secret-manager langchain-google-genai langgraph psycopg-binary psycopg psycopg_pool langgraph-checkpoint-postgres && python main.py"
+      bash -c "pip install google-cloud-pubsub google-cloud-secret-manager langchain-google-genai langgraph psycopg-binary psycopg psycopg_pool langgraph-checkpoint-postgres psycopg2-binary && python main.py"
 
   agente00-service:
     image: python:3.11-slim
@@ -120,13 +124,15 @@ services:
       - "8002:8000"
     environment:
       PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
-      GCP_PROJECT_ID: my-local-project
+      GCP_PROJECT_ID: digikawsay
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/val-sa-key.json
       DATABASE_URL: postgres://digikawsay_app:local_password_123@postgres:5432/digikawsay
     volumes:
       - ./src/agente00-service:/app
+      - ./infra/val-sa-key.json:/secrets/val-sa-key.json:ro
     working_dir: /app
     command: >
-      bash -c "pip install fastapi uvicorn pydantic psycopg2-binary python-multipart google-cloud-pubsub && uvicorn main:app --host 0.0.0.0 --port 8000"
+      bash -c "pip install fastapi uvicorn pydantic psycopg2-binary python-multipart google-cloud-pubsub google-cloud-monitoring google-cloud-billing && uvicorn main:app --host 0.0.0.0 --port 8000"
 
   ag-05-service:
     image: python:3.11-slim
@@ -135,7 +141,7 @@ services:
       - pubsub-init
     environment:
       PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
-      GCP_PROJECT_ID: my-local-project
+      GCP_PROJECT_ID: digikawsay
     volumes:
       - ./src/ag-05-service:/app
     working_dir: /app

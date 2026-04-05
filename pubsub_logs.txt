@@ -1,0 +1,507 @@
+﻿Inicializando Pub/Sub para el proyecto: digikawsay
+docker : ERROR: (gcloud.pub
+sub.topics.create) You do 
+not currently have an 
+active account selected.
+En línea: 1 Carácter: 1
++ docker logs 
+digikawsay-pubsub-init 
+2>&1 | Out-File -FilePath 
+pubsub_l ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
+    + CategoryInfo         
+     : NotSpecified: (ERR  
+  OR: (gcloud....count s   
+ elected.:String) [], R    
+emoteException
+    + FullyQualifiedErrorI 
+   d : NativeCommandError
+ 
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+Creando topic: iap.seed.input
+If you have already logged 
+in with a different 
+account, run:
+
+  $ gcloud config set 
+account ACCOUNT
+
+to select an already 
+authenticated account to 
+use.
+ERROR: (gcloud.pubsub.topic
+s.create) You do not 
+currently have an active 
+account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged 
+in with a different 
+account, run:
+
+  $ gcloud config set 
+account ACCOUNT
+
+to select an already 
+authenticated account to 
+use.
+Creando topic: iap.channel.inbound
+ERROR: (gcloud.pubsub.topic
+s.create) You do not 
+currently have an active 
+account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged 
+in with a different 
+account, run:
+
+  $ gcloud config set 
+account ACCOUNT
+
+to select an already 
+authenticated account to 
+use.
+Creando topic: iap.channel.outbound
+ERROR: (gcloud.pubsub.topic
+s.create) You do not 
+currently have an active 
+account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged 
+in with a different 
+account, run:
+
+Creando topic: iap.val.packet
+  $ gcloud config set 
+account ACCOUNT
+
+to select an already 
+authenticated account to 
+use.
+ERROR: (gcloud.pubsub.topic
+s.create) You do not 
+currently have an active 
+account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged 
+in with a different 
+account, run:
+
+  $ gcloud config set 
+account ACCOUNT
+
+to select an already 
+authenticated account to 
+use.
+Creando topic: iap.val.to.ag00
+ERROR: (gcloud.pubsub.topic
+s.create) You do not 
+currently have an active 
+account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged 
+in with a different 
+account, run:
+
+Creando topic: iap.orchestrator.directive
+  $ gcloud config set 
+account ACCOUNT
+
+to select an already 
+authenticated account to 
+use.
+ERROR: (gcloud.pubsub.topic
+s.create) You do not 
+currently have an active 
+account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged 
+in with a different 
+account, run:
+
+  $ gcloud config set 
+account ACCOUNT
+
+to select an already 
+authenticated account to 
+use.
+ERROR: (gcloud.pubsub.topic
+s.create) You do not 
+currently have an active 
+account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged 
+in with a different 
+account, run:
+
+  $ gcloud config set 
+account ACCOUNT
+
+to select an already 
+authenticated account to 
+use.
+ERROR: (gcloud.pubsub.topic
+s.create) You do not 
+currently have an active 
+account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged 
+in with a different 
+account, run:
+
+  $ gcloud config set 
+account ACCOUNT
+
+to select an already 
+authenticated account to 
+use.
+ERROR: (gcloud.pubsub.topic
+s.create) You do not 
+currently have an active 
+account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged 
+in with a different 
+account, run:
+
+  $ gcloud config set 
+account ACCOUNT
+
+to select an already 
+authenticated account to 
+use.
+ERROR: (gcloud.pubsub.subsc
+riptions.create) You do 
+not currently have an 
+active account selected.
+Please run:
+
+  $ gcloud auth login
+Creando topic: iap.alerts.safe_harbor
+Creando topic: iap.swarm.ag05
+Creando topic: iap.swarm.output
+Configurando suscripci├│n preprocessor-inbound-sub...
+Configurando suscripci├│n val-packet-sub...
+Configurando suscripci├│n val-directive-sub (sin dead letter, con expiration corta)...
+Configurando suscripci├│n ag00-val-packet-sub...
+
+to obtain new credentials.
+
+If you have already logged 
+in with a different 
+account, run:
+
+  $ gcloud config set 
+account ACCOUNT
+
+to select an already 
+authenticated account to 
+use.
+ERROR: (gcloud.pubsub.subsc
+riptions.create) argument 
+--max-delivery-attempts: 
+Value must be greater than 
+or equal to 5; received: 3
+Usage: gcloud pubsub 
+subscriptions create 
+SUBSCRIPTION [SUBSCRIPTION 
+...] (--topic=TOPIC : --top
+ic-project=TOPIC_PROJECT) 
+[optional flags]
+  optional flags may be  
+--ack-deadline | --bigquery
+-service-account-email |
+                         
+--bigquery-table | 
+--cloud-storage-bucket |
+                         --
+cloud-storage-file-datetime
+-format |
+                         --
+cloud-storage-file-prefix |
+                         --
+cloud-storage-file-suffix |
+                         
+--cloud-storage-max-bytes |
+                         --
+cloud-storage-max-duration 
+|
+                         --
+cloud-storage-max-messages 
+|
+                         --
+cloud-storage-output-format
+ |
+                         --
+cloud-storage-service-accou
+nt-email |
+                         --
+cloud-storage-use-topic-sch
+ema |
+                         --
+cloud-storage-write-metadat
+a | --dead-letter-topic |
+                         --
+dead-letter-topic-project 
+| --drop-unknown-fields |
+                         --
+enable-exactly-once-deliver
+y |
+                         
+--enable-message-ordering 
+| --expiration-period |
+                         
+--help | --labels | 
+--max-delivery-attempts |
+                         
+--max-retry-delay | 
+--message-filter |
+                         --
+message-retention-duration 
+|
+                         
+--message-transforms-file 
+| --min-retry-delay |
+                         --
+push-auth-service-account |
+                         
+--push-auth-token-audience 
+| --push-endpoint |
+                         
+--push-no-wrapper | --push-
+no-wrapper-write-metadata |
+                         
+--retain-acked-messages | 
+--tags | --topic-project |
+                         
+--use-table-schema | 
+--use-topic-schema |
+                         
+--write-metadata
+
+For detailed information 
+on this command and its 
+flags, run:
+  gcloud pubsub 
+subscriptions create --help
+ERROR: (gcloud.pubsub.subsc
+riptions.create) You do 
+not currently have an 
+active account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged 
+in with a different 
+account, run:
+Configurando suscripci├│n channel-outbound-sub...
+Configurando suscripci├│n ag05-swarm-sub...
+Configurando suscripci├│n ag00-swarm-output-sub...
+┬íPub/Sub inicializado correctamente! (Se ha omitido el resto del enjambre para el MVP)
+
+  $ gcloud config set 
+account ACCOUNT
+
+to select an already 
+authenticated account to 
+use.
+ERROR: (gcloud.pubsub.subsc
+riptions.create) argument 
+--max-retry-delay: value 
+must be less than or equal 
+to 600s; received: 900s
+Usage: gcloud pubsub 
+subscriptions create 
+SUBSCRIPTION [SUBSCRIPTION 
+...] (--topic=TOPIC : --top
+ic-project=TOPIC_PROJECT) 
+[optional flags]
+  optional flags may be  
+--ack-deadline | --bigquery
+-service-account-email |
+                         
+--bigquery-table | 
+--cloud-storage-bucket |
+                         --
+cloud-storage-file-datetime
+-format |
+                         --
+cloud-storage-file-prefix |
+                         --
+cloud-storage-file-suffix |
+                         
+--cloud-storage-max-bytes |
+                         --
+cloud-storage-max-duration 
+|
+                         --
+cloud-storage-max-messages 
+|
+                         --
+cloud-storage-output-format
+ |
+                         --
+cloud-storage-service-accou
+nt-email |
+                         --
+cloud-storage-use-topic-sch
+ema |
+                         --
+cloud-storage-write-metadat
+a | --dead-letter-topic |
+                         --
+dead-letter-topic-project 
+| --drop-unknown-fields |
+                         --
+enable-exactly-once-deliver
+y |
+                         
+--enable-message-ordering 
+| --expiration-period |
+                         
+--help | --labels | 
+--max-delivery-attempts |
+                         
+--max-retry-delay | 
+--message-filter |
+                         --
+message-retention-duration 
+|
+                         
+--message-transforms-file 
+| --min-retry-delay |
+                         --
+push-auth-service-account |
+                         
+--push-auth-token-audience 
+| --push-endpoint |
+                         
+--push-no-wrapper | --push-
+no-wrapper-write-metadata |
+                         
+--retain-acked-messages | 
+--tags | --topic-project |
+                         
+--use-table-schema | 
+--use-topic-schema |
+                         
+--write-metadata
+
+For detailed information 
+on this command and its 
+flags, run:
+  gcloud pubsub 
+subscriptions create --help
+ERROR: (gcloud.pubsub.subsc
+riptions.create) You do 
+not currently have an 
+active account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged 
+in with a different 
+account, run:
+
+  $ gcloud config set 
+account ACCOUNT
+
+to select an already 
+authenticated account to 
+use.
+ERROR: (gcloud.pubsub.subsc
+riptions.create) You do 
+not currently have an 
+active account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged 
+in with a different 
+account, run:
+
+  $ gcloud config set 
+account ACCOUNT
+
+to select an already 
+authenticated account to 
+use.
+ERROR: (gcloud.pubsub.subsc
+riptions.create) You do 
+not currently have an 
+active account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged 
+in with a different 
+account, run:
+
+  $ gcloud config set 
+account ACCOUNT
+
+to select an already 
+authenticated account to 
+use.

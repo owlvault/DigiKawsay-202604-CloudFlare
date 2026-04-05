@@ -1,0 +1,20 @@
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:40834 - "POST /admin/inject_directive HTTP/1.1" 400 Bad Request
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK
+INFO:     172.21.0.1:47938 - "GET /api/monitor HTTP/1.1" 200 OK

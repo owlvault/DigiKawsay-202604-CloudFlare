@@ -1,0 +1,108 @@
+Inicializando Pub/Sub para el proyecto: digikawsay
+ERROR: Failed to create topic [projects/digikawsay/topics/iap.dead.letter]: Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API. This command is unauthenticated because the [auth/disable_credentials] property is True.
+ERROR: (gcloud.pubsub.topics.create) Failed to create the following: [iap.dead.letter].
+Creando topic: iap.seed.input
+ERROR: Failed to create topic [projects/digikawsay/topics/iap.seed.input]: Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API. This command is unauthenticated because the [auth/disable_credentials] property is True.
+ERROR: (gcloud.pubsub.topics.create) Failed to create the following: [iap.seed.input].
+Creando topic: iap.channel.inbound
+ERROR: Failed to create topic [projects/digikawsay/topics/iap.channel.inbound]: Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API. This command is unauthenticated because the [auth/disable_credentials] property is True.
+ERROR: (gcloud.pubsub.topics.create) Failed to create the following: [iap.channel.inbound].
+Creando topic: iap.channel.outbound
+ERROR: Failed to create topic [projects/digikawsay/topics/iap.channel.outbound]: Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API. This command is unauthenticated because the [auth/disable_credentials] property is True.
+ERROR: (gcloud.pubsub.topics.create) Failed to create the following: [iap.channel.outbound].
+Creando topic: iap.val.packet
+ERROR: Failed to create topic [projects/digikawsay/topics/iap.val.packet]: Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API. This command is unauthenticated because the [auth/disable_credentials] property is True.
+ERROR: (gcloud.pubsub.topics.create) Failed to create the following: [iap.val.packet].
+Creando topic: iap.val.to.ag00
+ERROR: Failed to create topic [projects/digikawsay/topics/iap.val.to.ag00]: Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API. This command is unauthenticated because the [auth/disable_credentials] property is True.
+ERROR: (gcloud.pubsub.topics.create) Failed to create the following: [iap.val.to.ag00].
+Creando topic: iap.orchestrator.directive
+ERROR: Failed to create topic [projects/digikawsay/topics/iap.orchestrator.directive]: Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API. This command is unauthenticated because the [auth/disable_credentials] property is True.
+ERROR: (gcloud.pubsub.topics.create) Failed to create the following: [iap.orchestrator.directive].
+Creando topic: iap.alerts.safe_harbor
+ERROR: Failed to create topic [projects/digikawsay/topics/iap.alerts.safe_harbor]: Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API. This command is unauthenticated because the [auth/disable_credentials] property is True.
+ERROR: (gcloud.pubsub.topics.create) Failed to create the following: [iap.alerts.safe_harbor].
+Creando topic: iap.swarm.ag05
+ERROR: Failed to create topic [projects/digikawsay/topics/iap.swarm.ag05]: Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API. This command is unauthenticated because the [auth/disable_credentials] property is True.
+ERROR: (gcloud.pubsub.topics.create) Failed to create the following: [iap.swarm.ag05].
+Creando topic: iap.swarm.output
+ERROR: Failed to create topic [projects/digikawsay/topics/iap.swarm.output]: Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API. This command is unauthenticated because the [auth/disable_credentials] property is True.
+ERROR: (gcloud.pubsub.topics.create) Failed to create the following: [iap.swarm.output].
+Configurando suscripción preprocessor-inbound-sub...
+ERROR: Failed to create subscription [projects/digikawsay/subscriptions/preprocessor-inbound-sub]: Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API. This command is unauthenticated because the [auth/disable_credentials] property is True.
+ERROR: (gcloud.pubsub.subscriptions.create) Failed to create the following: [preprocessor-inbound-sub].
+Configurando suscripción val-packet-sub...
+ERROR: (gcloud.pubsub.subscriptions.create) argument --max-delivery-attempts: Value must be greater than or equal to 5; received: 3
+Usage: gcloud pubsub subscriptions create SUBSCRIPTION [SUBSCRIPTION ...] (--topic=TOPIC : --topic-project=TOPIC_PROJECT) [optional flags]
+  optional flags may be  --ack-deadline | --bigquery-service-account-email |
+                         --bigquery-table | --cloud-storage-bucket |
+                         --cloud-storage-file-datetime-format |
+                         --cloud-storage-file-prefix |
+                         --cloud-storage-file-suffix |
+                         --cloud-storage-max-bytes |
+                         --cloud-storage-max-duration |
+                         --cloud-storage-max-messages |
+                         --cloud-storage-output-format |
+                         --cloud-storage-service-account-email |
+                         --cloud-storage-use-topic-schema |
+                         --cloud-storage-write-metadata | --dead-letter-topic |
+                         --dead-letter-topic-project | --drop-unknown-fields |
+                         --enable-exactly-once-delivery |
+                         --enable-message-ordering | --expiration-period |
+                         --help | --labels | --max-delivery-attempts |
+                         --max-retry-delay | --message-filter |
+                         --message-retention-duration |
+                         --message-transforms-file | --min-retry-delay |
+                         --push-auth-service-account |
+                         --push-auth-token-audience | --push-endpoint |
+                         --push-no-wrapper | --push-no-wrapper-write-metadata |
+                         --retain-acked-messages | --tags | --topic-project |
+                         --use-table-schema | --use-topic-schema |
+                         --write-metadata
+
+For detailed information on this command and its flags, run:
+  gcloud pubsub subscriptions create --help
+Configurando suscripción val-directive-sub (sin dead letter, con expiration corta)...
+ERROR: Failed to create subscription [projects/digikawsay/subscriptions/val-directive-sub]: Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API. This command is unauthenticated because the [auth/disable_credentials] property is True.
+ERROR: (gcloud.pubsub.subscriptions.create) Failed to create the following: [val-directive-sub].
+Configurando suscripción ag00-val-packet-sub...
+ERROR: (gcloud.pubsub.subscriptions.create) argument --max-retry-delay: value must be less than or equal to 600s; received: 900s
+Usage: gcloud pubsub subscriptions create SUBSCRIPTION [SUBSCRIPTION ...] (--topic=TOPIC : --topic-project=TOPIC_PROJECT) [optional flags]
+  optional flags may be  --ack-deadline | --bigquery-service-account-email |
+                         --bigquery-table | --cloud-storage-bucket |
+                         --cloud-storage-file-datetime-format |
+                         --cloud-storage-file-prefix |
+                         --cloud-storage-file-suffix |
+                         --cloud-storage-max-bytes |
+                         --cloud-storage-max-duration |
+                         --cloud-storage-max-messages |
+                         --cloud-storage-output-format |
+                         --cloud-storage-service-account-email |
+                         --cloud-storage-use-topic-schema |
+                         --cloud-storage-write-metadata | --dead-letter-topic |
+                         --dead-letter-topic-project | --drop-unknown-fields |
+                         --enable-exactly-once-delivery |
+                         --enable-message-ordering | --expiration-period |
+                         --help | --labels | --max-delivery-attempts |
+                         --max-retry-delay | --message-filter |
+                         --message-retention-duration |
+                         --message-transforms-file | --min-retry-delay |
+                         --push-auth-service-account |
+                         --push-auth-token-audience | --push-endpoint |
+                         --push-no-wrapper | --push-no-wrapper-write-metadata |
+                         --retain-acked-messages | --tags | --topic-project |
+                         --use-table-schema | --use-topic-schema |
+                         --write-metadata
+
+For detailed information on this command and its flags, run:
+  gcloud pubsub subscriptions create --help
+Configurando suscripción channel-outbound-sub...
+ERROR: Failed to create subscription [projects/digikawsay/subscriptions/channel-outbound-sub]: Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API. This command is unauthenticated because the [auth/disable_credentials] property is True.
+ERROR: (gcloud.pubsub.subscriptions.create) Failed to create the following: [channel-outbound-sub].
+Configurando suscripción ag05-swarm-sub...
+ERROR: Failed to create subscription [projects/digikawsay/subscriptions/ag05-swarm-sub]: Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API. This command is unauthenticated because the [auth/disable_credentials] property is True.
+ERROR: (gcloud.pubsub.subscriptions.create) Failed to create the following: [ag05-swarm-sub].
+Configurando suscripción ag00-swarm-output-sub...
+ERROR: Failed to create subscription [projects/digikawsay/subscriptions/ag00-swarm-output-sub]: Method doesn't allow unregistered callers (callers without established identity). Please use API Key or other form of API consumer identity to call this API. This command is unauthenticated because the [auth/disable_credentials] property is True.
+ERROR: (gcloud.pubsub.subscriptions.create) Failed to create the following: [ag00-swarm-output-sub].
+¡Pub/Sub inicializado correctamente! (Se ha omitido el resto del enjambre para el MVP)

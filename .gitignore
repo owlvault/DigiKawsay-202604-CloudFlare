@@ -28,3 +28,8 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# GCP Credentials (NEVER commit)
+infra/val-sa-key.json
+*-sa-key.json
+*.json.bak

@@ -1,7 +1,7 @@
 import os
 from google.cloud import pubsub_v1
 
-PROJECT_ID = "my-local-project"
+PROJECT_ID = "digikawsay"
 # Note that PUBSUB_EMULATOR_HOST must be set prior to running this script
 print(f"PUBSUB_EMULATOR_HOST IS {os.getenv('PUBSUB_EMULATOR_HOST')}")
 topics = [

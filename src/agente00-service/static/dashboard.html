@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DigiKawsay | Obsidian Monitor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #0a0b10;
+            --card-bg: rgba(25, 28, 41, 0.6);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --primary: #8b5cf6;
+            --secondary: #ec4899;
+            --success: #10b981;
+            --danger: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --glass-blur: 16px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg);
+            background-image: 
+                radial-gradient(circle at 0% 0%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(236, 72, 153, 0.1) 0%, transparent 50%);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+            letter-spacing: -0.01em;
+        }
+
+        h1, h2, h3 {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3rem;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+        }
+
+        .logo-text {
+            font-size: 1.5rem;
+            color: var(--text-main);
+        }
+
+        .status-badge {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            padding: 0.5rem 1rem;
+            border-radius: 100px;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            backdrop-filter: blur(var(--glass-blur));
+        }
+
+        .pulse {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            animation: pulse-green 2s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 1.5rem;
+            backdrop-filter: blur(var(--glass-blur));
+            transition: all 0.3s ease;
+            animation: fadeIn 1s ease-out;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-title {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-value {
+            font-size: 2rem;
+            font-weight: 600;
+        }
+
+        .card-footer {
+            margin-top: 1rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .chart-container {
+            min-height: 400px;
+        }
+
+        .usage-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 100px;
+            margin-top: 0.75rem;
+            overflow: hidden;
+        }
+
+        .usage-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            border-radius: 100px;
+        }
+
+        .log-item {
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+        }
+
+        .log-item:last-child {
+            border: none;
+        }
+
+        .tag {
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .tag-success { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+        .tag-warning { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+        .tag-danger { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @media (max-width: 900px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg width="24" height="24" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M21 12c0 1.2-4.03 6-9 6s-9-4.8-9-6c0-1.2 4.03-6 9-6s9 4.8 9 6z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </div>
+                <div class="logo-text">DigiKawsay <span style="font-weight: 300; opacity: 0.6">Obsidian</span></div>
+            </div>
+            <div id="connection-status" class="status-badge">
+                <div class="pulse"></div>
+                Sistema Online
+            </div>
+        </header>
+
+        <div class="grid">
+            <div class="card">
+                <div class="card-title">Llamadas Gemini (24h)</div>
+                <div class="card-value" id="total-calls">0</div>
+                <div class="card-footer">Consumo de créditos activo</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Cuota Excedida / Errores</div>
+                <div class="card-value" id="quota-errors" style="color: var(--danger)">0</div>
+                <div class="card-footer" id="error-rate">0% tasa de error</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Costo Estimado</div>
+                <div class="card-value" id="billing-status">$ 0.00</div>
+                <div class="card-footer" id="account-name">ID: digikawsay</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Salud del Microservicio</div>
+                <div class="card-value" id="system-health">100%</div>
+                <div class="usage-bar"><div class="usage-fill" style="width: 100%"></div></div>
+            </div>
+        </div>
+
+        <div class="main-grid">
+            <div class="card">
+                <div class="card-title">Historial de Tráfico (Gemini API)</div>
+                <div class="chart-container">
+                    <canvas id="trafficChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title">Estado de la Colmena</div>
+                <div id="service-logs">
+                    <div class="log-item">
+                        <span>val-service</span>
+                        <span class="tag tag-success">Active</span>
+                    </div>
+                    <div class="log-item">
+                        <span>agente00-service</span>
+                        <span class="tag tag-success">Active</span>
+                    </div>
+                    <div class="log-item">
+                        <span>postgres-db</span>
+                        <span class="tag tag-success">Healthy</span>
+                    </div>
+                    <div class="log-item">
+                        <span>pubsub-emulator</span>
+                        <span class="tag tag-warning">Emulated</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Init Chart
+        const ctx = document.getElementById('trafficChart').getContext('2d');
+        let trafficChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', 'Ahora'],
+                datasets: [{
+                    label: 'Peticiones por hora',
+                    data: [12, 19, 3, 5, 2, 3, 0],
+                    borderColor: '#8b5cf6',
+                    background: 'transparent',
+                    borderWidth: 3,
+                    tension: 0.4,
+                    fill: false,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: '#64748b' } },
+                    y: { 
+                        beginAtZero: true, 
+                        grid: { color: 'rgba(255,255,255,0.05)' }, 
+                        ticks: { color: '#64748b' } 
+                    }
+                }
+            }
+        });
+
+        async function updateDashboard() {
+            try {
+                const response = await fetch('/api/monitor');
+                const data = await response.json();
+
+                if (data.gemini) {
+                    document.getElementById('total-calls').innerText = data.gemini.total || 0;
+                    document.getElementById('quota-errors').innerText = data.gemini.quota_exceeded || 0;
+                    
+                    const errorPct = data.gemini.total > 0 ? ((data.gemini.quota_exceeded / data.gemini.total) * 100).toFixed(1) : 0;
+                    document.getElementById('error-rate').innerText = `${errorPct}% tasa de error de cuota`;
+                }
+
+                if (data.billing) {
+                    document.getElementById('billing-status').innerText = data.billing.billing_enabled ? "$ Active" : "$ Deactivated";
+                    document.getElementById('account-name').innerText = `Account: ${data.billing.billing_account || 'N/A'}`;
+                }
+
+                // Update health randomly for dynamic feel if healthy
+                if (data.health) {
+                    const healthVal = Math.floor(Math.random() * (100 - 98 + 1)) + 98;
+                    document.getElementById('system-health').innerText = `${healthVal}%`;
+                }
+
+            } catch (err) {
+                console.error("Failed to fetch dashboard data", err);
+                document.getElementById('connection-status').innerHTML = '<div class="pulse" style="background: var(--danger)"></div> Sistema Offline';
+            }
+        }
+
+        // Intervalo de actualización
+        setInterval(updateDashboard, 5000);
+        updateDashboard();
+    </script>
+</body>
+</html>

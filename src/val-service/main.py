@@ -9,10 +9,11 @@ from graph import get_compiled_graph, initialize_llm
 from langgraph.checkpoint.postgres import PostgresSaver
 from psycopg_pool import ConnectionPool
 
-PROJECT_ID = os.getenv("GCP_PROJECT_ID", "my-gcp-project")
+PROJECT_ID = os.getenv("GCP_PROJECT_ID", "digikawsay")
 SUBSCRIPTION_NAME = os.getenv("PUBSUB_PACKET_INBOUND_SUB", "val-packet-sub")
 OUTBOUND_TOPIC = os.getenv("PUBSUB_OUTBOUND_TOPIC", "iap.channel.outbound")
 SUPERVISOR_TOPIC = os.getenv("PUBSUB_VAL_TO_AG00_TOPIC", "iap.val.to.ag00")
+DIRECTIVE_SUBSCRIPTION_NAME = os.getenv("PUBSUB_DIRECTIVE_SUB", "val-directive-sub")
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -90,8 +91,44 @@ def process_dialogue_packet(message: pubsub_v1.subscriber.message.Message):
         # 1. Configurar hilo persistente (thread_id) para LangGraph Checkpointer
         config = {"configurable": {"thread_id": participant_id}}
 
-        # 2. Input para LangGraph
+        # 1.5 Cargar directivas pendientes del Wizard of Oz desde PostgreSQL
+        active_directives = []
+        directive_ids_to_mark = []
+        try:
+            import psycopg2 as pg2
+            db_conn = pg2.connect(DATABASE_URL)
+            db_cur = db_conn.cursor()
+            db_cur.execute("""
+                CREATE TABLE IF NOT EXISTS wizard_directives (
+                    id TEXT PRIMARY KEY,
+                    participant_id TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    urgency TEXT DEFAULT 'MEDIUM',
+                    status TEXT DEFAULT 'PENDING',
+                    issued_by TEXT DEFAULT 'human_investigator',
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            db_conn.commit()
+            db_cur.execute(
+                "SELECT id, content FROM wizard_directives WHERE participant_id = %s AND status = 'PENDING' ORDER BY created_at ASC",
+                (participant_id,)
+            )
+            rows = db_cur.fetchall()
+            for row in rows:
+                directive_ids_to_mark.append(row[0])
+                active_directives.append(row[1])
+            db_cur.close()
+            db_conn.close()
+            if active_directives:
+                logger.info(f"VAL - {len(active_directives)} directiva(s) WoZ cargada(s) para {participant_id}")
+        except Exception as dir_err:
+            logger.warning(f"No se pudieron cargar directivas WoZ: {dir_err}")
+
+        # 2. Input para LangGraph (con directivas si existen)
         input_data = {"messages": [HumanMessage(content=user_text)]}
+        if active_directives:
+            input_data["expert_directives"] = active_directives
 
         # 3. Ejecutar el grafo — con manejo específico de errores de cuota
         try:
@@ -172,10 +209,50 @@ def process_dialogue_packet(message: pubsub_v1.subscriber.message.Message):
             json.dumps(ag00_report).encode("utf-8"),
         )
 
+        # 7. Marcar directivas WoZ como APPLIED
+        if directive_ids_to_mark:
+            try:
+                import psycopg2 as pg2
+                db_conn = pg2.connect(DATABASE_URL)
+                db_cur = db_conn.cursor()
+                for d_id in directive_ids_to_mark:
+                    db_cur.execute(
+                        "UPDATE wizard_directives SET status = 'APPLIED' WHERE id = %s",
+                        (d_id,)
+                    )
+                db_conn.commit()
+                db_cur.close()
+                db_conn.close()
+                logger.info(f"VAL - {len(directive_ids_to_mark)} directiva(s) marcada(s) como APPLIED")
+            except Exception as mark_err:
+                logger.warning(f"No se pudieron marcar directivas: {mark_err}")
+
         message.ack()
 
     except Exception as e:
         logger.error(f"Error procesando packet en VAL: {e}")
+        message.nack()
+
+def process_directive_packet(message: pubsub_v1.subscriber.message.Message):
+    try:
+        packet = json.loads(message.data.decode("utf-8"))
+        participant_id = packet.get("participant_id")
+        content = packet.get("directive_content")
+        
+        if not participant_id or not content:
+            logger.warning("Directive missing participant_id or content")
+            message.ack()
+            return
+            
+        logger.info(f"Injecting Directive for {participant_id}: {content}")
+        
+        config = {"configurable": {"thread_id": participant_id}}
+        
+        # Inject directly into the graph state
+        app.update_state(config, {"current_directives": [content]})
+        message.ack()
+    except Exception as e:
+        logger.error(f"Error processing directive packet: {e}")
         message.nack()
 
 
@@ -204,15 +281,23 @@ def main():
         subscription_path, callback=process_dialogue_packet
     )
 
+    directive_sub_path = subscriber.subscription_path(PROJECT_ID, DIRECTIVE_SUBSCRIPTION_NAME)
+    logger.info(f"VAL Agent escuchando directivas en: {directive_sub_path}")
+    directive_pull_future = subscriber.subscribe(
+        directive_sub_path, callback=process_directive_packet
+    )
+
     with subscriber:
         try:
             streaming_pull_future.result()
         except TimeoutError:
             streaming_pull_future.cancel()
+            directive_pull_future.cancel()
             streaming_pull_future.result()
         except Exception as e:
             logger.error(f"VAL Subscriber failed: {e}")
             streaming_pull_future.cancel()
+            directive_pull_future.cancel()
 
 
 if __name__ == "__main__":
