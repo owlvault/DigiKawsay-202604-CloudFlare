@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # 1. Base de Datos (PostgreSQL) para Checkpointer y Estado
+  # 1. Base de Datos (PostgreSQL) para Checkpointer, Estado y Piloto
   postgres:
     image: postgres:15-alpine
     container_name: digikawsay-postgres
@@ -31,9 +31,13 @@ services:
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
       PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
-      DEFAULT_VECTORIZER_MODULE: 'text2vec-palm'
-      ENABLE_MODULES: 'text2vec-palm'
+      DEFAULT_VECTORIZER_MODULE: 'none'
       CLUSTER_HOSTNAME: 'node1'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   # 3. Emulador de Google Cloud Pub/Sub
   pubsub-emulator:
@@ -42,111 +46,123 @@ services:
     ports:
       - "8085:8085"
     command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   # 4. Inicializador de Pub/Sub Topics
   pubsub-init:
     image: gcr.io/google.com/cloudsdktool/cloud-sdk:latest
     container_name: digikawsay-pubsub-init
     depends_on:
-      - pubsub-emulator
+      pubsub-emulator:
+        condition: service_healthy
     environment:
       PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
       CLOUDSDK_AUTH_DISABLE_CREDENTIALS: 1
       CLOUDSDK_CORE_PROJECT: digikawsay
     volumes:
       - ./infra/pubsub_init.sh:/scripts/pubsub_init.sh
-    entrypoint: [ "bash", "-c", "sleep 10 && bash /scripts/pubsub_init.sh digikawsay" ]
+    entrypoint: [ "bash", "-c", "sleep 5 && bash /scripts/pubsub_init.sh digikawsay" ]
 
-  # -- Microservicios de DigiKawsay -- 
-  # (Requieren construir una imagen base de python, usar 'python:3.11-slim' en producción.
-  # Para este entorno local simulamos la ejecución de los workers asincronos montando el código)
+  # -- Microservicios DigiKawsay (con Dockerfiles) --
 
   channel-layer:
-    image: python:3.11-slim
+    build: ./src/channel-layer
     container_name: digikawsay-channel
     depends_on:
-      - pubsub-emulator
+      pubsub-emulator:
+        condition: service_healthy
     ports:
       - "8001:8080"
     environment:
       PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
       GCP_PROJECT_ID: digikawsay
       PUBSUB_INBOUND_TOPIC: iap.channel.inbound
-      TELEGRAM_BOT_TOKEN: $TELEGRAM_BOT_TOKEN
-    volumes:
-      - ./src/channel-layer:/app
-    working_dir: /app
-    command: >
-      bash -c "pip install fastapi uvicorn google-cloud-pubsub requests && uvicorn main:app --host 0.0.0.0 --port 8080"
+      PUBSUB_OUTBOUND_SUB: channel-outbound-sub
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      DATABASE_URL: postgresql://digikawsay_app:local_password_123@postgres:5432/digikawsay
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: on-failure
 
   preprocessor:
-    image: python:3.11-slim
+    build: ./src/preprocessor
     container_name: digikawsay-preprocessor
     depends_on:
-      - pubsub-init
-      - weaviate
+      pubsub-emulator:
+        condition: service_healthy
+      weaviate:
+        condition: service_healthy
     environment:
       PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
       GCP_PROJECT_ID: digikawsay
       WEAVIATE_URL: http://weaviate:8080
-    volumes:
-      - ./src/preprocessor:/app
-    working_dir: /app
-    command: >
-      bash -c "pip install google-cloud-pubsub && python main.py"
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+    restart: on-failure
 
   val-service:
-    image: python:3.11-slim
+    build: ./src/val-service
     container_name: digikawsay-val
     depends_on:
-      - pubsub-init
-      - postgres
+      pubsub-emulator:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      weaviate:
+        condition: service_healthy
     environment:
       PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
       GCP_PROJECT_ID: digikawsay
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/val-sa-key.json
-      GEMINI_API_KEY: $GEMINI_API_KEY
-      DATABASE_URL: postgres://digikawsay_app:local_password_123@postgres:5432/digikawsay
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      DATABASE_URL: postgresql://digikawsay_app:local_password_123@postgres:5432/digikawsay
+      WEAVIATE_URL: http://weaviate:8080
     volumes:
-      - ./src/val-service:/app
       - ./infra/val-sa-key.json:/secrets/val-sa-key.json:ro
-    working_dir: /app
-    command: >
-      bash -c "pip install google-cloud-pubsub google-cloud-secret-manager langchain-google-genai langgraph psycopg-binary psycopg psycopg_pool langgraph-checkpoint-postgres psycopg2-binary && python main.py"
+    restart: on-failure
 
   agente00-service:
-    image: python:3.11-slim
+    build: ./src/agente00-service
     container_name: digikawsay-agente00
     depends_on:
-      - pubsub-init
-      - postgres
+      pubsub-emulator:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     ports:
       - "8002:8000"
     environment:
       PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
       GCP_PROJECT_ID: digikawsay
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/val-sa-key.json
-      DATABASE_URL: postgres://digikawsay_app:local_password_123@postgres:5432/digikawsay
+      DATABASE_URL: postgresql://digikawsay_app:local_password_123@postgres:5432/digikawsay
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
     volumes:
-      - ./src/agente00-service:/app
       - ./infra/val-sa-key.json:/secrets/val-sa-key.json:ro
-    working_dir: /app
-    command: >
-      bash -c "pip install fastapi uvicorn pydantic psycopg2-binary python-multipart google-cloud-pubsub google-cloud-monitoring google-cloud-billing && uvicorn main:app --host 0.0.0.0 --port 8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: on-failure
 
   ag-05-service:
-    image: python:3.11-slim
+    build: ./src/ag-05-service
     container_name: digikawsay-ag05
     depends_on:
-      - pubsub-init
+      pubsub-emulator:
+        condition: service_healthy
     environment:
       PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
       GCP_PROJECT_ID: digikawsay
-    volumes:
-      - ./src/ag-05-service:/app
-    working_dir: /app
-    command: >
-      bash -c "pip install google-cloud-pubsub && python main.py"
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+    restart: on-failure
 
 volumes:
   pgdata:

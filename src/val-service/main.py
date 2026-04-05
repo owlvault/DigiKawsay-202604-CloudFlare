@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import logging
 from concurrent.futures import TimeoutError
 from google.cloud import pubsub_v1
@@ -9,18 +10,19 @@ from graph import get_compiled_graph, initialize_llm
 from langgraph.checkpoint.postgres import PostgresSaver
 from psycopg_pool import ConnectionPool
 
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "digikawsay")
 SUBSCRIPTION_NAME = os.getenv("PUBSUB_PACKET_INBOUND_SUB", "val-packet-sub")
 OUTBOUND_TOPIC = os.getenv("PUBSUB_OUTBOUND_TOPIC", "iap.channel.outbound")
 SUPERVISOR_TOPIC = os.getenv("PUBSUB_VAL_TO_AG00_TOPIC", "iap.val.to.ag00")
-DIRECTIVE_SUBSCRIPTION_NAME = os.getenv("PUBSUB_DIRECTIVE_SUB", "val-directive-sub")
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://postgres:postgres@localhost:5432/digikawsay",
 )
 
-# Mensaje de contingencia cuando el modelo de IA no está disponible
 CONTINGENCY_MESSAGE = (
     "Necesito un momento para procesar todo lo que hemos hablado, "
     "vuelvo contigo pronto."
@@ -38,8 +40,11 @@ subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
 publisher = pubsub_v1.PublisherClient()
 
 
+def get_db():
+    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+
+
 def _publish_contingency(participant_id: str, message_id: str):
-    """Publica un mensaje de contingencia elegante al canal de salida."""
     outbound_msg = {
         "participant_id": participant_id,
         "text": CONTINGENCY_MESSAGE,
@@ -49,139 +54,215 @@ def _publish_contingency(participant_id: str, message_id: str):
         publisher.topic_path(PROJECT_ID, OUTBOUND_TOPIC),
         json.dumps(outbound_msg).encode("utf-8"),
     )
-    logger.info(
-        f"Mensaje de contingencia enviado a participante {participant_id}"
-    )
 
 
 def _notify_ag00_quota_exceeded(participant_id: str):
-    """Notifica al supervisor AG-00 de un problema de cuota/recursos."""
     ag00_report = {
         "event": "QUOTA_EXCEEDED",
         "participant_id": participant_id,
-        "detail": (
-            "VAL no pudo generar respuesta por límite de cuota o error "
-            "de autenticación con el proveedor de IA."
-        ),
+        "detail": "VAL no pudo generar respuesta por límite de cuota o error de IA.",
     }
     publisher.publish(
         publisher.topic_path(PROJECT_ID, SUPERVISOR_TOPIC),
         json.dumps(ag00_report).encode("utf-8"),
     )
-    logger.info(
-        f"AG-00 notificado: QUOTA_EXCEEDED para participante {participant_id}"
-    )
+
+
+def _load_project_context(participant_id: str):
+    """Load the project's seed_prompt for this participant."""
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT pr.project_id, pr.seed_prompt, pr.name as project_name
+            FROM participants p
+            JOIN projects pr ON p.project_id = pr.project_id
+            WHERE p.participant_id = %s AND p.status = 'active'
+            LIMIT 1
+        """, (participant_id,))
+        result = cur.fetchone()
+        cur.close()
+        conn.close()
+        return dict(result) if result else None
+    except Exception as e:
+        logger.warning(f"Could not load project context: {e}")
+        return None
+
+
+def _load_pending_directives(participant_id: str):
+    """Load pending WoZ directives from PostgreSQL."""
+    directives = []
+    directive_ids = []
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, content FROM wizard_directives
+            WHERE participant_id = %s AND status = 'PENDING'
+            ORDER BY created_at ASC
+        """, (participant_id,))
+        rows = cur.fetchall()
+        for row in rows:
+            directive_ids.append(row['id'])
+            directives.append(row['content'])
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Could not load WoZ directives: {e}")
+    return directives, directive_ids
+
+
+def _persist_turn(participant_id: str, project_id: str, user_text: str,
+                  val_response: str, emotional_register: str, speech_act: str,
+                  topics: list, directive_applied: str, latency_ms: int):
+    """Persist a complete dialogue turn to the database."""
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+
+        # Get current turn count
+        cur.execute("""
+            SELECT COALESCE(MAX(turn_number), 0) as max_turn
+            FROM dialogue_turns
+            WHERE participant_id = %s AND project_id = %s
+        """, (participant_id, project_id))
+        max_turn = cur.fetchone()['max_turn']
+        turn_number = max_turn + 1
+
+        # Insert the turn
+        cur.execute("""
+            INSERT INTO dialogue_turns
+                (participant_id, project_id, turn_number, user_text, val_response,
+                 emotional_register, speech_act, topics, directive_applied, latency_ms)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (participant_id, project_id, turn_number, user_text, val_response,
+              emotional_register, speech_act, topics, directive_applied, latency_ms))
+
+        # Upsert dialogue_states
+        cur.execute("""
+            INSERT INTO dialogue_states
+                (participant_id, project_id, cycle_id, turn_count, emotional_register,
+                 topics_covered, last_turn_at, status)
+            VALUES (%s, %s, 1, %s, %s, %s, NOW(), 'active')
+            ON CONFLICT (participant_id, project_id, cycle_id)
+            DO UPDATE SET
+                turn_count = %s,
+                emotional_register = %s,
+                topics_covered = dialogue_states.topics_covered || %s,
+                last_turn_at = NOW()
+        """, (participant_id, project_id, turn_number, emotional_register, topics,
+              turn_number, emotional_register, topics))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        logger.info(f"Turn {turn_number} persisted for {participant_id}")
+    except Exception as e:
+        logger.error(f"Error persisting turn: {e}")
+
+
+def _mark_directives_applied(directive_ids: list, effect_summary: str = ""):
+    """Mark WoZ directives as applied."""
+    if not directive_ids:
+        return
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        for d_id in directive_ids:
+            cur.execute("""
+                UPDATE wizard_directives 
+                SET status = 'APPLIED', applied_at = NOW(), effect_summary = %s
+                WHERE id = %s
+            """, (effect_summary, d_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Could not mark directives: {e}")
 
 
 def process_dialogue_packet(message: pubsub_v1.subscriber.message.Message):
-    packet = None
     participant_id = "unknown"
     message_id = "unknown"
+    start_time = time.time()
 
     try:
         packet = json.loads(message.data.decode("utf-8"))
         participant_id = packet.get("participant_id", "unknown")
-        user_text = packet.get("original_text")
+        user_text = packet.get("original_text", packet.get("text", ""))
         message_id = packet.get("message_id", "unknown")
+        project_id_str = packet.get("project_id", "")
 
-        logger.info(
-            f"VAL - Procesando request de participante {participant_id}"
-        )
+        logger.info(f"VAL - Processing request from {participant_id}")
 
-        # 1. Configurar hilo persistente (thread_id) para LangGraph Checkpointer
+        # 1. Load project context (seed_prompt)
+        project_ctx = _load_project_context(participant_id)
+        if not project_id_str and project_ctx:
+            project_id_str = str(project_ctx.get('project_id', ''))
+
+        # 2. Load pending WoZ directives
+        active_directives, directive_ids = _load_pending_directives(participant_id)
+
+        # 3. Configure LangGraph thread
         config = {"configurable": {"thread_id": participant_id}}
 
-        # 1.5 Cargar directivas pendientes del Wizard of Oz desde PostgreSQL
-        active_directives = []
-        directive_ids_to_mark = []
-        try:
-            import psycopg2 as pg2
-            db_conn = pg2.connect(DATABASE_URL)
-            db_cur = db_conn.cursor()
-            db_cur.execute("""
-                CREATE TABLE IF NOT EXISTS wizard_directives (
-                    id TEXT PRIMARY KEY,
-                    participant_id TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    urgency TEXT DEFAULT 'MEDIUM',
-                    status TEXT DEFAULT 'PENDING',
-                    issued_by TEXT DEFAULT 'human_investigator',
-                    created_at TIMESTAMP DEFAULT NOW()
-                )
-            """)
-            db_conn.commit()
-            db_cur.execute(
-                "SELECT id, content FROM wizard_directives WHERE participant_id = %s AND status = 'PENDING' ORDER BY created_at ASC",
-                (participant_id,)
-            )
-            rows = db_cur.fetchall()
-            for row in rows:
-                directive_ids_to_mark.append(row[0])
-                active_directives.append(row[1])
-            db_cur.close()
-            db_conn.close()
-            if active_directives:
-                logger.info(f"VAL - {len(active_directives)} directiva(s) WoZ cargada(s) para {participant_id}")
-        except Exception as dir_err:
-            logger.warning(f"No se pudieron cargar directivas WoZ: {dir_err}")
-
-        # 2. Input para LangGraph (con directivas si existen)
+        # 4. Build input with project context
         input_data = {"messages": [HumanMessage(content=user_text)]}
         if active_directives:
             input_data["expert_directives"] = active_directives
+        if project_ctx:
+            input_data["project_config"] = {
+                "seed_prompt": project_ctx.get("seed_prompt", ""),
+                "project_name": project_ctx.get("project_name", ""),
+            }
 
-        # 3. Ejecutar el grafo — con manejo específico de errores de cuota
+        # 5. Invoke the graph
         try:
             output = app.invoke(input_data, config)
         except Exception as invoke_err:
-            # Detectar errores de cuota / autenticación de Google Cloud
-            err_type = type(invoke_err).__name__
             err_str = str(invoke_err).lower()
-
-            is_quota_error = any(
-                marker in err_str
-                for marker in [
-                    "429",
-                    "resource exhausted",
-                    "resourceexhausted",
-                    "quota",
-                    "rate limit",
-                    "too many requests",
-                ]
-            )
-            is_auth_error = any(
-                marker in err_str
-                for marker in [
-                    "permission denied",
-                    "permissiondenied",
-                    "403",
-                    "authentication",
-                    "credentials",
-                    "billing",
-                ]
-            )
-
-            if is_quota_error or is_auth_error:
-                error_kind = "cuota" if is_quota_error else "autenticación"
-                logger.error(
-                    f"Error de {error_kind} al invocar Gemini para "
-                    f"participante {participant_id}: {invoke_err}"
-                )
+            is_quota = any(m in err_str for m in ["429", "resource exhausted", "quota", "rate limit"])
+            is_auth = any(m in err_str for m in ["permission denied", "403", "credentials"])
+            if is_quota or is_auth:
                 _publish_contingency(participant_id, message_id)
                 _notify_ag00_quota_exceeded(participant_id)
                 message.ack()
                 return
-
-            # Si no es de cuota/auth, re-lanzar para el catch genérico
             raise
 
-        # 4. Extraer respuesta de VAL
+        # 6. Extract response and metadata
         ai_message = output["messages"][-1]
         val_response_text = ai_message.content
+        latency_ms = int((time.time() - start_time) * 1000)
 
-        logger.info(f"VAL - Respuesta generada: {val_response_text[:50]}...")
+        # Extract emotion and speech act from dialogue_states
+        dstates = output.get("dialogue_states", {})
+        current_state = dstates.get(participant_id, {})
+        emotion = current_state.get("emotional_register", "Neutral")
+        topics = current_state.get("topics_covered", [])
+        # Get the last speech act from topics if available
+        speech_act = ""
+        for t in reversed(topics):
+            if t.startswith("Act: "):
+                speech_act = t[5:]
+                break
 
-        # 5. Publicar a Channel Outbound (para Telegram)
+        directive_content = "; ".join(active_directives) if active_directives else None
+
+        # 7. Persist turn to database
+        _persist_turn(
+            participant_id=participant_id,
+            project_id=project_id_str,
+            user_text=user_text,
+            val_response=val_response_text,
+            emotional_register=emotion,
+            speech_act=speech_act,
+            topics=topics[-3:] if topics else [],  # last 3 topics
+            directive_applied=directive_content,
+            latency_ms=latency_ms
+        )
+
+        # 8. Publish to Channel Outbound
         outbound_msg = {
             "participant_id": participant_id,
             "text": val_response_text,
@@ -192,99 +273,82 @@ def process_dialogue_packet(message: pubsub_v1.subscriber.message.Message):
             json.dumps(outbound_msg).encode("utf-8"),
         )
 
-        dstates = output.get("dialogue_states", {})
-        current_state = dstates.get(participant_id, {})
-        emotion = current_state.get("emotional_register", "Neutral")
+        # 8.5 El Espejo — deliver semantic convergences/divergences every 3rd turn
+        turn_count = len(output["messages"]) // 2
+        if turn_count >= 3 and turn_count % 3 == 0 and project_id_str:
+            try:
+                from espejo import get_espejo, format_espejo_for_val
+                espejo_result = get_espejo(
+                    participant_id=participant_id,
+                    project_id=project_id_str,
+                    latest_text=user_text,
+                )
+                espejo_text = format_espejo_for_val(espejo_result)
+                if espejo_text:
+                    import time as _time
+                    _time.sleep(2)  # Brief pause for natural pacing
+                    espejo_msg = {
+                        "participant_id": participant_id,
+                        "text": espejo_text,
+                        "in_reply_to": message_id,
+                    }
+                    publisher.publish(
+                        publisher.topic_path(PROJECT_ID, OUTBOUND_TOPIC),
+                        json.dumps(espejo_msg).encode("utf-8"),
+                    )
+                    logger.info(f"Espejo delivered for {participant_id}: "
+                               f"{len(espejo_result.get('convergences', []))} convergences, "
+                               f"{len(espejo_result.get('divergences', []))} divergences")
+            except Exception as espejo_err:
+                logger.warning(f"Espejo delivery failed: {espejo_err}")
 
-        # 6. Notificar al supervisor (AG-00) del ciclo completado
+        # 9. Notify AG-00
+        turn_count = len(output["messages"]) // 2
         ag00_report = {
             "event": "TURN_COMPLETED",
             "participant_id": participant_id,
-            "turn_count": len(output["messages"]) // 2,
+            "project_id": project_id_str,
+            "turn_count": turn_count,
             "emotional_register": emotion,
-            "topics": current_state.get("topics_covered", []),
+            "topics": topics[-5:] if topics else [],
+            "latency_ms": latency_ms,
         }
         publisher.publish(
             publisher.topic_path(PROJECT_ID, SUPERVISOR_TOPIC),
             json.dumps(ag00_report).encode("utf-8"),
         )
 
-        # 7. Marcar directivas WoZ como APPLIED
-        if directive_ids_to_mark:
-            try:
-                import psycopg2 as pg2
-                db_conn = pg2.connect(DATABASE_URL)
-                db_cur = db_conn.cursor()
-                for d_id in directive_ids_to_mark:
-                    db_cur.execute(
-                        "UPDATE wizard_directives SET status = 'APPLIED' WHERE id = %s",
-                        (d_id,)
-                    )
-                db_conn.commit()
-                db_cur.close()
-                db_conn.close()
-                logger.info(f"VAL - {len(directive_ids_to_mark)} directiva(s) marcada(s) como APPLIED")
-            except Exception as mark_err:
-                logger.warning(f"No se pudieron marcar directivas: {mark_err}")
+        # 10. Mark WoZ directives as applied
+        _mark_directives_applied(directive_ids, f"Applied in turn response: {val_response_text[:100]}")
 
         message.ack()
+        logger.info(f"VAL - Turn completed for {participant_id} ({latency_ms}ms)")
 
     except Exception as e:
-        logger.error(f"Error procesando packet en VAL: {e}")
-        message.nack()
-
-def process_directive_packet(message: pubsub_v1.subscriber.message.Message):
-    try:
-        packet = json.loads(message.data.decode("utf-8"))
-        participant_id = packet.get("participant_id")
-        content = packet.get("directive_content")
-        
-        if not participant_id or not content:
-            logger.warning("Directive missing participant_id or content")
-            message.ack()
-            return
-            
-        logger.info(f"Injecting Directive for {participant_id}: {content}")
-        
-        config = {"configurable": {"thread_id": participant_id}}
-        
-        # Inject directly into the graph state
-        app.update_state(config, {"current_directives": [content]})
-        message.ack()
-    except Exception as e:
-        logger.error(f"Error processing directive packet: {e}")
+        logger.error(f"Error processing packet in VAL: {e}")
         message.nack()
 
 
 def main():
     global pool, app
 
-    # 1. Inicializar LLM (recupera API key de Secret Manager o env var)
-    logger.info("Inicializando LLM de VAL...")
+    logger.info("Initializing VAL LLM...")
     initialize_llm()
 
-    # 2. Conectar al Checkpointer en Postgres
-    logger.info("Conectando al Checkpointer en Postgres...")
+    logger.info("Connecting to Postgres Checkpointer...")
     pool = ConnectionPool(
         conninfo=DATABASE_URL,
         max_size=10,
         kwargs={"autocommit": True},
     )
 
-    # Initialize checkpointer and auto-run setup (creates langgraph schemas)
     checkpointer = PostgresSaver(pool)
     checkpointer.setup()
     app = get_compiled_graph(checkpointer=checkpointer)
 
-    logger.info(f"VAL Agent escuchando en sub: {subscription_path}")
+    logger.info(f"VAL Agent listening on: {subscription_path}")
     streaming_pull_future = subscriber.subscribe(
         subscription_path, callback=process_dialogue_packet
-    )
-
-    directive_sub_path = subscriber.subscription_path(PROJECT_ID, DIRECTIVE_SUBSCRIPTION_NAME)
-    logger.info(f"VAL Agent escuchando directivas en: {directive_sub_path}")
-    directive_pull_future = subscriber.subscribe(
-        directive_sub_path, callback=process_directive_packet
     )
 
     with subscriber:
@@ -292,12 +356,10 @@ def main():
             streaming_pull_future.result()
         except TimeoutError:
             streaming_pull_future.cancel()
-            directive_pull_future.cancel()
             streaming_pull_future.result()
         except Exception as e:
             logger.error(f"VAL Subscriber failed: {e}")
             streaming_pull_future.cancel()
-            directive_pull_future.cancel()
 
 
 if __name__ == "__main__":

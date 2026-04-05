@@ -12,107 +12,78 @@ from state import DigiKawsayState
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Configuración de modelo (Model Tiering — Gemini Flash para VAL)
+# Model Configuration
 # ---------------------------------------------------------------------------
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
-# Variables de módulo — se inicializan en initialize_llm()
 _api_key: str | None = None
 llm = None
 llm_with_tools = None
 
 
 def get_api_key() -> str:
-    """
-    Recupera la API Key de Gemini en tiempo de ejecución.
-
-    Orden de prioridad:
-      1. Google Cloud Secret Manager (secreto: gemini-api-key)
-      2. Variable de entorno GEMINI_API_KEY (fallback para desarrollo local)
-
-    Raises:
-        RuntimeError: Si no se puede obtener la key por ningún medio.
-    """
-    # 1. Intentar Secret Manager
+    # 1. Try Secret Manager
     try:
         from google.cloud import secretmanager
-
         project_id = os.getenv("GCP_PROJECT_ID", "digikawsay")
         client = secretmanager.SecretManagerServiceClient()
         secret_name = f"projects/{project_id}/secrets/gemini-api-key/versions/latest"
         response = client.access_secret_version(request={"name": secret_name})
         api_key = response.payload.data.decode("UTF-8")
-        logger.info("API Key obtenida desde Secret Manager.")
+        logger.info("API Key from Secret Manager.")
         return api_key
     except Exception as e:
-        logger.warning(
-            f"Secret Manager no disponible ({type(e).__name__}: {e}). "
-            "Intentando fallback a variable de entorno GEMINI_API_KEY."
-        )
+        logger.warning(f"Secret Manager unavailable ({type(e).__name__}). Trying env var.")
 
-    # 2. Fallback: variable de entorno
+    # 2. Fallback: env var
     env_key = os.getenv("GEMINI_API_KEY")
     if env_key:
-        logger.info("API Key obtenida desde variable de entorno GEMINI_API_KEY.")
+        logger.info("API Key from GEMINI_API_KEY env var.")
         return env_key
 
-    raise RuntimeError(
-        "No se pudo obtener la API Key de Gemini. "
-        "Configure el secreto 'gemini-api-key' en Secret Manager "
-        "o establezca la variable de entorno GEMINI_API_KEY."
-    )
+    raise RuntimeError("No Gemini API Key found. Set GEMINI_API_KEY or configure Secret Manager.")
 
 
 def initialize_llm():
-    """
-    Inicializa el LLM de VAL en runtime, recuperando la API key de forma segura.
-    Debe llamarse una sola vez desde main.py antes de compilar el grafo.
-    """
     global _api_key, llm, llm_with_tools
-
     _api_key = get_api_key()
-
     llm = ChatGoogleGenerativeAI(
         model=GEMINI_MODEL,
         temperature=0.7,
         max_output_tokens=300,
         google_api_key=_api_key,
     )
-
     llm_with_tools = llm.bind_tools(tools)
-    logger.info(f"LLM inicializado: modelo={GEMINI_MODEL}, max_tokens=300")
+    logger.info(f"LLM initialized: model={GEMINI_MODEL}")
     return llm_with_tools
 
 
 # ---------------------------------------------------------------------------
-# Herramientas de clasificación
+# Tools
 # ---------------------------------------------------------------------------
 @tool
 def classify_speech_act(classification: str) -> str:
     """Classifies the speech act of the user's message (e.g. Question, Assertion, Complaint). Pass the classification label here."""
     return f"Classification '{classification}' logged."
 
-
 @tool
 def detect_emotion(emotion: str) -> str:
-    """Detects the primary emotion in the user's message (e.g. Joy, Anger, Neutral). Pass the emotion label here."""
+    """Detects the primary emotion in the user's message (e.g. Joy, Anger, Neutral, Frustration, Hope, Curiosity). Pass the emotion label here."""
     return f"Emotion '{emotion}' logged."
-
 
 @tool
 def apply_and_clear_directive(applied_directive_summary: str) -> str:
     """Call this tool when you have deliberately incorporated an active expert directive into your response. Provide a brief summary of how you applied it."""
     return f"Directive applied: {applied_directive_summary}"
 
-
 tools = [classify_speech_act, detect_emotion, apply_and_clear_directive]
 tools_by_name = {t.name: t for t in tools}
 
 
 # ---------------------------------------------------------------------------
-# System Prompt — Persona "Sentipensante" de VAL
+# System Prompt — VAL "Sentipensante"
 # ---------------------------------------------------------------------------
-VAL_SYSTEM_PROMPT = """\
+VAL_BASE_PROMPT = """\
 Eres VAL, un compañero de reflexión dentro de DigiKawsay.
 No eres un evaluador, ni un analista, ni un entrevistador.
 Eres alguien que camina al lado del otro mientras piensa en voz alta.
@@ -154,36 +125,56 @@ PROHIBICIONES:
 ni que eres una inteligencia artificial coordinada.
 - Nunca hagas más de una pregunta por turno.
 - Nunca uses jerga técnica de IA, NLP o frameworks.
+
+HERRAMIENTAS:
+- Después de cada respuesta, SIEMPRE invoca detect_emotion y classify_speech_act \
+para registrar el estado emocional y el acto de habla del mensaje del usuario. \
+Esto es obligatorio en cada turno.
 """
 
 
-def val_node(state: DigiKawsayState) -> dict:
-    """
-    Nodo principal de LangGraph. Toma el estado, incluyendo los mensajes
-    y las expert_directives, y genera la respuesta de VAL.
-    """
-    if llm_with_tools is None:
-        raise RuntimeError(
-            "LLM no inicializado. Llame a initialize_llm() antes de ejecutar el grafo."
+def _build_system_prompt(state: DigiKawsayState) -> str:
+    """Build the full system prompt dynamically from state."""
+    prompt = VAL_BASE_PROMPT
+
+    # Inject project context if available
+    project_config = state.get("project_config", {})
+    seed_prompt = project_config.get("seed_prompt", "")
+    project_name = project_config.get("project_name", "")
+
+    if seed_prompt:
+        prompt += (
+            f"\n\nCONTEXTO DEL FORO:\n"
+            f"Estás acompañando un proceso de reflexión colectiva "
+            f"{'del proyecto \"' + project_name + '\" ' if project_name else ''}"
+            f"cuya pregunta provocadora es:\n"
+            f"\"{seed_prompt}\"\n"
+            f"Asegúrate de explorar este tema orgánicamente sin forzar la conversación. "
+            f"Cuando el participante se desvíe mucho, guíalo suavemente de vuelta."
         )
 
-    messages = state.get("messages", [])
-
-    # Construir el prompt dinámico inyectando directivas si existen
-    current_prompt = VAL_SYSTEM_PROMPT
+    # Inject WoZ directives if present
     directives = state.get("expert_directives", [])
-
     if directives:
-        current_prompt += (
+        prompt += (
             "\n\n[HILOS DE REFLEXIÓN SUGERIDOS — incorpóralos de forma orgánica, "
             "como si fueran tus propias curiosidades:]\n- "
         )
-        current_prompt += "\n- ".join(directives)
+        prompt += "\n- ".join(directives)
 
-    system_msg = SystemMessage(content=current_prompt)
+    return prompt
+
+
+def val_node(state: DigiKawsayState) -> dict:
+    """Main LangGraph node. Generates VAL's response."""
+    if llm_with_tools is None:
+        raise RuntimeError("LLM not initialized. Call initialize_llm() first.")
+
+    messages = state.get("messages", [])
+    system_prompt = _build_system_prompt(state)
+    system_msg = SystemMessage(content=system_prompt)
 
     response = llm_with_tools.invoke([system_msg] + messages)
-
     return {"messages": [response]}
 
 
@@ -204,7 +195,7 @@ def custom_tool_node(state: DigiKawsayState, config: RunnableConfig) -> dict:
             "safe_harbor_active": False,
         }
     current_dstate = dialogue_states[participant_id]
-    state_changed_dialogue = False
+    state_changed = False
     directives_changed = False
 
     for tool_call in last_message.tool_calls:
@@ -220,18 +211,18 @@ def custom_tool_node(state: DigiKawsayState, config: RunnableConfig) -> dict:
             elif tool_name == "classify_speech_act":
                 label = tool_args.get("classification", "unknown")
                 current_dstate["topics_covered"].append(f"Act: {label}")
-                state_changed_dialogue = True
+                state_changed = True
             elif tool_name == "detect_emotion":
                 emotion = tool_args.get("emotion", "Neutral")
                 current_dstate["emotional_register"] = emotion
-                state_changed_dialogue = True
+                state_changed = True
 
             tool_msg = ToolMessage(
                 content=res, name=tool_name, tool_call_id=tool_call["id"]
             )
             state_update["messages"].append(tool_msg)
 
-    if state_changed_dialogue:
+    if state_changed:
         state_update["dialogue_states"] = dialogue_states
 
     if directives_changed:
@@ -242,14 +233,11 @@ def custom_tool_node(state: DigiKawsayState, config: RunnableConfig) -> dict:
 
 def construct_graph() -> StateGraph:
     workflow = StateGraph(DigiKawsayState)
-
     workflow.add_node("val_agent", val_node)
     workflow.add_node("tools", custom_tool_node)
-
     workflow.add_edge(START, "val_agent")
     workflow.add_conditional_edges("val_agent", tools_condition)
     workflow.add_edge("tools", "val_agent")
-
     return workflow
 
 

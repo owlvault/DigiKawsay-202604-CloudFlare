@@ -1,16 +1,24 @@
+"""
+AG-05 — Methodologist Agent
+
+Analyzes conversational fragments for methodological patterns using Gemini.
+Detects: collective language, power dynamics, emotional depth, Shadow IT,
+knowledge silos, and recommendation loops.
+"""
 import os
 import json
 import logging
 import uuid
 from concurrent.futures import TimeoutError
 from google.cloud import pubsub_v1
+from google import genai
 from datetime import datetime
 
-# Configuración
-PROJECT_ID = os.getenv("GCP_PROJECT_ID", "my-gcp-project")
+# Configuration
+PROJECT_ID = os.getenv("GCP_PROJECT_ID", "digikawsay")
 SUBSCRIPTION_NAME = os.getenv("PUBSUB_AG05_INBOUND_SUB", "ag05-swarm-sub")
-INBOUND_TOPIC = os.getenv("PUBSUB_SWARM_INBOUND_TOPIC", "iap.swarm.ag05") 
 OUTBOUND_TOPIC = os.getenv("PUBSUB_SWARM_OUTPUT_TOPIC", "iap.swarm.output")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("AG-05-Methodologist")
@@ -19,64 +27,147 @@ subscriber = pubsub_v1.SubscriberClient()
 subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
 publisher = pubsub_v1.PublisherClient()
 
+gemini_client = None
+
+ANALYSIS_PROMPT = """\
+Eres un analista metodológico especializado en diagnósticos organizacionales.
+Analiza el siguiente fragmento de conversación y produce un JSON con este formato exacto:
+
+{
+  "collective_pattern": "INDIVIDUAL | COLECTIVO | MIXTO",
+  "power_dynamic": "HORIZONTAL | VERTICAL | AMBIGUO",
+  "emotional_depth": "SUPERFICIAL | MODERADO | PROFUNDO",
+  "shadow_indicators": ["lista de señales de Shadow IT, bypass burocrático o conocimiento tribal detectadas"],
+  "key_entities": ["procesos, departamentos, herramientas o personas mencionadas"],
+  "insight": "Un párrafo breve con la observación metodológica principal",
+  "confidence": 0.0 a 1.0,
+  "recommended_probe": "Una pregunta de seguimiento que el facilitador podría usar"
+}
+
+Fragmento a analizar:
+Emoción detectada: {emotion}
+Temas previos: {topics}
+Texto: "{text}"
+
+Responde SOLO con el JSON, sin markdown ni explicaciones adicionales.
+"""
+
+
+def init_gemini():
+    global gemini_client
+    if GEMINI_API_KEY:
+        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+        logger.info("Gemini client initialized for AG-05 analysis.")
+    else:
+        logger.warning("No GEMINI_API_KEY — AG-05 will use heuristic fallback.")
+
+
+def analyze_with_gemini(text: str, emotion: str, topics: list) -> dict:
+    """Use Gemini to perform real methodological analysis."""
+    if not gemini_client:
+        return _heuristic_fallback(text)
+
+    try:
+        prompt = ANALYSIS_PROMPT.format(
+            text=text,
+            emotion=emotion or "No detectada",
+            topics=", ".join(topics) if topics else "Ninguno"
+        )
+
+        response = gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+
+        # Parse JSON from response
+        response_text = response.text.strip()
+        # Handle markdown code blocks if present
+        if response_text.startswith("```"):
+            response_text = response_text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+
+        analysis = json.loads(response_text)
+        logger.info(f"AG-05 Gemini analysis: {analysis.get('insight', '')[:80]}...")
+        return analysis
+
+    except Exception as e:
+        logger.error(f"Gemini analysis failed: {e}")
+        return _heuristic_fallback(text)
+
+
+def _heuristic_fallback(text: str) -> dict:
+    """Fallback heuristic analysis when Gemini is unavailable."""
+    text_lower = text.lower()
+
+    collective_words = ["nosotros", "juntos", "comunidad", "acuerdo", "equipo", "todos"]
+    shadow_words = ["whatsapp", "excel", "a mano", "por fuera", "pregúntale a"]
+
+    is_collective = any(kw in text_lower for kw in collective_words)
+    has_shadow = [kw for kw in shadow_words if kw in text_lower]
+
+    return {
+        "collective_pattern": "COLECTIVO" if is_collective else "INDIVIDUAL",
+        "power_dynamic": "AMBIGUO",
+        "emotional_depth": "MODERADO",
+        "shadow_indicators": has_shadow,
+        "key_entities": [],
+        "insight": "Análisis heurístico (Gemini no disponible). "
+                   + ("Patrón colectivo detectado." if is_collective else "Declaración individual."),
+        "confidence": 0.4,
+        "recommended_probe": "¿Cómo se relaciona esto con otros procesos del equipo?",
+        "_fallback": True,
+    }
+
+
 def insight_reducer(agent_output: dict):
-    """
-    Simula la reducción de insights y publica a la salida del enjambre.
-    """
-    logger.info(f"Insight Reducer: Procesando output '{agent_output.get('agent_id')}'")
-    logger.info(f"REPORTE CUALITATIVO: {agent_output.get('payload')}")
-    
-    # Publicar a 'iap.swarm.output'
+    """Publish processed insight to the swarm output topic."""
     try:
         publisher.publish(
             publisher.topic_path(PROJECT_ID, OUTBOUND_TOPIC),
             json.dumps(agent_output).encode("utf-8")
         )
-        logger.info(f"Insight publicado en {OUTBOUND_TOPIC}")
+        logger.info(f"Insight published to {OUTBOUND_TOPIC}")
     except Exception as e:
-        logger.error(f"Fallo publicando insight: {e}")
+        logger.error(f"Failed publishing insight: {e}")
+
 
 def process_task_envelope(message: pubsub_v1.subscriber.message.Message):
-    """
-    Simula el procesamiento de un Task Envelope del Participant.
-    """
+    """Process a task from AG-00 and produce a methodological observation."""
     try:
         packet = json.loads(message.data.decode("utf-8"))
         participant_id = packet.get("participant_id")
         text = packet.get("clean_text", packet.get("original_text", ""))
-        
-        logger.info(f"AG-05 evaluando mensaje de {participant_id}")
-        
-        # Lógica heurística mock: buscamos palabras clave metodológicas
-        keywords = ["nosotros", "juntos", "comunidad", "acuerdo"]
-        if any(kw in text.lower() for kw in keywords):
-            observation = "Patrón colectivo detectado. Fuerte sentido de 'nosotros'."
-        else:
-            observation = "Declaración individual. Requiere explorar conexión comunitaria."
-            
-        # Agent Output en formato estándar
+        emotion = packet.get("emotion", "")
+        topics = packet.get("topics", [])
+
+        logger.info(f"AG-05 analyzing message from {participant_id}")
+
+        # Run analysis (Gemini or heuristic fallback)
+        analysis = analyze_with_gemini(text, emotion, topics)
+
+        # Build standard agent output
         agent_output = {
             "output_id": str(uuid.uuid4()),
             "task_id": packet.get("message_id", "unknown_task"),
             "agent_id": "AG-05",
-            "type": "OBSERVATION",
-            "payload": {"insight": observation, "confidence": 0.85},
+            "participant_id": participant_id,
+            "type": "METHODOLOGY_OBSERVATION",
+            "payload": analysis,
             "timestamp": datetime.utcnow().isoformat() + "Z"
         }
-        
-        # Enviar al Insight Reducer
+
         insight_reducer(agent_output)
-        
         message.ack()
-        
+
     except Exception as e:
-        logger.error(f"AG-05 fallo en procesamiento de envelope: {e}")
+        logger.error(f"AG-05 processing failed: {e}")
         message.nack()
 
+
 def main():
-    logger.info(f"AG-05 activo en sub: {subscription_path}")
+    init_gemini()
+    logger.info(f"AG-05 Methodologist active on: {subscription_path}")
     streaming_pull_future = subscriber.subscribe(subscription_path, callback=process_task_envelope)
-    
+
     with subscriber:
         try:
             streaming_pull_future.result()
@@ -86,6 +177,7 @@ def main():
         except Exception as e:
             logger.error(f"AG-05 Subscriber failed: {e}")
             streaming_pull_future.cancel()
+
 
 if __name__ == "__main__":
     main()

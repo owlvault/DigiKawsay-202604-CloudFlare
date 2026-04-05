@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DigiKawsay — Panel de Control</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --surface2: #252836;
+            --border: #2d3142;
+            --primary: #8b5cf6;
+            --primary-soft: rgba(139, 92, 246, 0.15);
+            --accent: #06d6a0;
+            --accent-soft: rgba(6, 214, 160, 0.15);
+            --warning: #ffd166;
+            --danger: #ef476f;
+            --text: #e4e6ef;
+            --text2: #9da3b4;
+            --text3: #626880;
+            --radius: 12px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* Layout */
+        .app { display: flex; min-height: 100vh; }
+        .sidebar {
+            width: 260px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .main { flex: 1; padding: 32px; overflow-y: auto; }
+
+        /* Sidebar */
+        .logo {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 8px;
+            padding: 8px;
+        }
+        .logo span { color: var(--text3); font-weight: 300; font-size: 0.75rem; display: block; }
+        .nav-item {
+            padding: 10px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            color: var(--text2);
+            font-size: 0.9rem;
+            transition: all 0.15s;
+        }
+        .nav-item:hover, .nav-item.active {
+            background: var(--primary-soft);
+            color: var(--primary);
+        }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .card h3 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text3);
+            margin-bottom: 16px;
+        }
+
+        /* KPI Grid */
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .kpi {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            text-align: center;
+        }
+        .kpi .value { font-size: 2rem; font-weight: 700; color: var(--primary); }
+        .kpi .label { font-size: 0.8rem; color: var(--text3); margin-top: 4px; }
+
+        /* Table */
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 10px 12px; font-size: 0.75rem; text-transform: uppercase;
+             letter-spacing: 0.05em; color: var(--text3); border-bottom: 1px solid var(--border); }
+        td { padding: 12px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        tr:hover { background: var(--surface2); }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-active { background: var(--accent-soft); color: var(--accent); }
+        .badge-invited { background: rgba(255, 209, 102, 0.15); color: var(--warning); }
+        .badge-completed { background: var(--primary-soft); color: var(--primary); }
+
+        /* Forms */
+        input, textarea, select {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.9rem;
+            width: 100%;
+            outline: none;
+            transition: border 0.15s;
+        }
+        input:focus, textarea:focus { border-color: var(--primary); }
+        label { font-size: 0.85rem; color: var(--text2); display: block; margin-bottom: 6px; }
+        .form-row { margin-bottom: 16px; }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: #7c4ddb; }
+        .btn-secondary { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-sm { padding: 6px 14px; font-size: 0.8rem; }
+
+        /* Chat */
+        .chat-container { max-height: 400px; overflow-y: auto; padding: 12px; }
+        .msg { margin-bottom: 12px; padding: 10px 14px; border-radius: 10px; max-width: 85%; }
+        .msg-user { background: var(--primary-soft); margin-left: auto; border-bottom-right-radius: 2px; }
+        .msg-val { background: var(--surface2); border-bottom-left-radius: 2px; }
+        .msg-meta { font-size: 0.7rem; color: var(--text3); margin-top: 4px; }
+
+        /* Directive */
+        .directive-form { display: flex; gap: 12px; align-items: flex-end; }
+        .directive-form textarea { flex: 1; min-height: 60px; }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 14px 24px;
+            border-radius: 8px;
+            background: var(--accent);
+            color: #0f1117;
+            font-weight: 500;
+            z-index: 1000;
+            animation: slideUp 0.3s ease;
+        }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } }
+
+        .hidden { display: none !important; }
+        .section { display: none; }
+        .section.active { display: block; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main { padding: 16px; }
+            .kpi-grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="logo">
+            DigiKawsay
+            <span>Panel de Control v2</span>
+        </div>
+        <div class="nav-item active" onclick="showSection('overview')">📊 Overview</div>
+        <div class="nav-item" onclick="showSection('projects')">📁 Proyectos</div>
+        <div class="nav-item" onclick="showSection('participants')">👥 Participantes</div>
+        <div class="nav-item" onclick="showSection('wizard')">🧙 Wizard of Oz</div>
+        <div class="nav-item" onclick="showSection('export')">📤 Exportar</div>
+        <div class="nav-item" onclick="showSection('setup')">⚙️ Setup</div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main">
+        <!-- OVERVIEW -->
+        <div id="sec-overview" class="section active">
+            <h2 style="margin-bottom: 24px;">Dashboard</h2>
+            <div class="kpi-grid" id="kpi-grid">
+                <div class="kpi"><div class="value" id="kpi-projects">-</div><div class="label">Proyectos Activos</div></div>
+                <div class="kpi"><div class="value" id="kpi-participants">-</div><div class="label">Participantes</div></div>
+                <div class="kpi"><div class="value" id="kpi-turns">-</div><div class="label">Turnos Totales</div></div>
+                <div class="kpi"><div class="value" id="kpi-directives">-</div><div class="label">Directivas WoZ</div></div>
+            </div>
+            <div class="card">
+                <h3>Proyectos Recientes</h3>
+                <table>
+                    <thead><tr><th>Nombre</th><th>Estado</th><th>Participantes</th><th>Turnos</th><th>Creado</th></tr></thead>
+                    <tbody id="overview-projects"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- PROJECTS -->
+        <div id="sec-projects" class="section">
+            <h2 style="margin-bottom: 24px;">Gestión de Proyectos</h2>
+            <div class="card">
+                <h3>Crear Nuevo Piloto</h3>
+                <div class="form-row"><label>Nombre del Piloto</label><input id="proj-name" placeholder="Ej: Diagnóstico Comunicación Q2"></div>
+                <div class="form-row"><label>Pregunta Provocadora (Seed Prompt)</label><textarea id="proj-seed" rows="3" placeholder="Ej: ¿Cómo perciben la comunicación entre su área y Operaciones frente a los nuevos objetivos?"></textarea></div>
+                <div class="form-row" style="display:flex; gap:16px;">
+                    <div style="flex:1"><label>Max. Participantes</label><input id="proj-max" type="number" value="10"></div>
+                    <div style="flex:1"><label>Duración (días)</label><input id="proj-days" type="number" value="7"></div>
+                </div>
+                <button class="btn btn-primary" onclick="createProject()">Crear Piloto</button>
+            </div>
+            <div class="card">
+                <h3>Pilotos Existentes</h3>
+                <table>
+                    <thead><tr><th>Nombre</th><th>Seed Prompt</th><th>Estado</th><th>Participantes</th><th>Acciones</th></tr></thead>
+                    <tbody id="projects-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- PARTICIPANTS -->
+        <div id="sec-participants" class="section">
+            <h2 style="margin-bottom: 24px;">Participantes</h2>
+            <div class="card">
+                <h3>Registrar Participantes</h3>
+                <div class="form-row">
+                    <label>Proyecto</label>
+                    <select id="part-project"></select>
+                </div>
+                <div class="form-row"><label>Nombres (uno por línea)</label><textarea id="part-names" rows="5" placeholder="Juan Pérez&#10;María García&#10;Carlos Rodríguez"></textarea></div>
+                <button class="btn btn-primary" onclick="registerBatch()">Registrar y Generar Invitaciones</button>
+            </div>
+            <div class="card" id="invites-card" style="display:none;">
+                <h3>🔗 Links de Invitación</h3>
+                <div id="invite-links"></div>
+            </div>
+            <div class="card">
+                <h3>Monitoreo de Participantes</h3>
+                <div class="form-row"><label>Proyecto</label><select id="monitor-project" onchange="loadParticipants()"></select></div>
+                <table>
+                    <thead><tr><th>Nombre</th><th>Estado</th><th>Turnos</th><th>Emoción</th><th>Último msg</th><th></th></tr></thead>
+                    <tbody id="participants-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- WIZARD OF OZ -->
+        <div id="sec-wizard" class="section">
+            <h2 style="margin-bottom: 24px;">Wizard of Oz</h2>
+            <div style="display:flex; gap:20px;">
+                <div style="flex: 1;">
+                    <div class="card">
+                        <h3>Conversación en Vivo</h3>
+                        <div class="form-row"><label>Participante</label><select id="woz-participant" onchange="loadConversation()"></select></div>
+                        <div class="chat-container" id="chat-container">
+                            <p style="color: var(--text3); text-align: center; padding: 40px;">Selecciona un participante para ver su conversación</p>
+                        </div>
+                    </div>
+                </div>
+                <div style="width: 380px;">
+                    <div class="card">
+                        <h3>Inyectar Directiva</h3>
+                        <div class="form-row"><label>Directiva / Hilo de reflexión sugerido</label>
+                        <textarea id="woz-directive" rows="4" placeholder="Ej: Pregúntale qué le preocupa realmente sobre el liderazgo"></textarea></div>
+                        <div class="form-row"><label>Urgencia</label>
+                        <select id="woz-urgency"><option value="LOW">Baja</option><option value="MEDIUM" selected>Media</option><option value="HIGH">Alta</option></select></div>
+                        <button class="btn btn-primary" style="width:100%" onclick="injectDirective()">Inyectar Directiva</button>
+                    </div>
+                    <div class="card">
+                        <h3>Historial de Directivas</h3>
+                        <div id="directive-history" style="max-height: 200px; overflow-y: auto;">
+                            <p style="color: var(--text3); font-size: 0.85rem;">Sin directivas aún</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- EXPORT -->
+        <div id="sec-export" class="section">
+            <h2 style="margin-bottom: 24px;">Exportar & Reportes</h2>
+            <div class="card">
+                <h3>Exportar Transcripciones</h3>
+                <div class="form-row"><label>Proyecto</label><select id="export-project"></select></div>
+                <div style="display:flex; gap: 12px;">
+                    <button class="btn btn-primary" onclick="exportData('json')">📄 Exportar JSON</button>
+                    <button class="btn btn-secondary" onclick="exportData('csv')">📊 Exportar CSV</button>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Reporte del Piloto</h3>
+                <div class="form-row"><label>Proyecto</label><select id="report-project"></select></div>
+                <button class="btn btn-primary" onclick="generateReport()">📈 Generar Reporte</button>
+                <div id="report-output" style="margin-top: 16px;"></div>
+            </div>
+            <div class="card">
+                <h3>Cerrar Piloto</h3>
+                <div class="form-row"><label>Proyecto</label><select id="close-project"></select></div>
+                <button class="btn btn-danger" onclick="closeProject()">🔒 Cerrar Piloto</button>
+            </div>
+        </div>
+
+        <!-- SETUP -->
+        <div id="sec-setup" class="section">
+            <h2 style="margin-bottom: 24px;">Configuración</h2>
+            <div class="card">
+                <h3>Configurar Webhook de Telegram</h3>
+                <div class="form-row"><label>Bot Token</label><input id="setup-token" placeholder="1234567:AAHk..."></div>
+                <div class="form-row"><label>URL de Ngrok</label><input id="setup-ngrok" placeholder="https://abc123.ngrok.app"></div>
+                <button class="btn btn-primary" onclick="setupWebhook()">🔗 Configurar Webhook</button>
+                <div id="setup-result" style="margin-top: 12px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+const API = '';  // Same origin
+
+function showSection(name) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('sec-' + name).classList.add('active');
+    event.target.classList.add('active');
+    if (name === 'overview') loadOverview();
+    if (name === 'projects') loadProjects();
+    if (name === 'participants') { loadProjectSelectors(); loadParticipants(); }
+    if (name === 'wizard') loadWozParticipants();
+    if (name === 'export') loadProjectSelectors();
+}
+
+function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.remove('hidden');
+    setTimeout(() => t.classList.add('hidden'), 3000);
+}
+
+async function api(path, opts = {}) {
+    const res = await fetch(API + path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts
+    });
+    return res.json();
+}
+
+// --- Overview ---
+async function loadOverview() {
+    const data = await api('/admin/projects');
+    const projects = data.projects || [];
+    document.getElementById('kpi-projects').textContent = projects.filter(p => p.status === 'active').length;
+    document.getElementById('kpi-participants').textContent = projects.reduce((s, p) => s + (p.active_participants || 0), 0);
+    document.getElementById('kpi-turns').textContent = projects.reduce((s, p) => s + (p.total_turns || 0), 0);
+
+    const tbody = document.getElementById('overview-projects');
+    tbody.innerHTML = projects.map(p => `
+        <tr>
+            <td>${p.name}</td>
+            <td><span class="badge badge-${p.status === 'active' ? 'active' : 'completed'}">${p.status}</span></td>
+            <td>${p.active_participants || 0}</td>
+            <td>${p.total_turns || 0}</td>
+            <td style="color: var(--text3); font-size: 0.85rem;">${new Date(p.created_at).toLocaleDateString()}</td>
+        </tr>
+    `).join('');
+}
+
+// --- Projects ---
+async function loadProjects() {
+    const data = await api('/admin/projects');
+    const tbody = document.getElementById('projects-table');
+    tbody.innerHTML = (data.projects || []).map(p => `
+        <tr>
+            <td>${p.name}</td>
+            <td style="max-width:300px; font-size:0.85rem; color:var(--text2)">${(p.seed_prompt || '').slice(0, 80)}...</td>
+            <td><span class="badge badge-${p.status === 'active' ? 'active' : 'completed'}">${p.status}</span></td>
+            <td>${p.active_participants || 0}</td>
+            <td>
+                <button class="btn btn-sm btn-secondary" onclick="copyProjectId('${p.project_id}')">📋 ID</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function createProject() {
+    const payload = {
+        name: document.getElementById('proj-name').value,
+        seed_prompt: document.getElementById('proj-seed').value,
+        max_participants: parseInt(document.getElementById('proj-max').value) || 10,
+        pilot_duration_days: parseInt(document.getElementById('proj-days').value) || 7,
+    };
+    if (!payload.name || !payload.seed_prompt) return toast('Nombre y seed prompt son requeridos');
+    const res = await api('/admin/create_project', { method: 'POST', body: JSON.stringify(payload) });
+    if (res.status === 'success') {
+        toast(`Piloto creado: ${res.project_id.slice(0, 8)}`);
+        loadProjects();
+        loadProjectSelectors();
+    } else {
+        toast('Error: ' + (res.detail || 'Unknown'));
+    }
+}
+
+function copyProjectId(id) {
+    navigator.clipboard.writeText(id);
+    toast('Project ID copiado');
+}
+
+// --- Participants ---
+async function loadProjectSelectors() {
+    const data = await api('/admin/projects');
+    const projects = data.projects || [];
+    const options = projects.map(p => `<option value="${p.project_id}">${p.name}</option>`).join('');
+    ['part-project', 'monitor-project', 'export-project', 'report-project', 'close-project'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = options;
+    });
+}
+
+async function registerBatch() {
+    const projectId = document.getElementById('part-project').value;
+    const names = document.getElementById('part-names').value;
+    if (!projectId || !names.trim()) return toast('Selecciona proyecto y agrega nombres');
+
+    const form = new FormData();
+    form.append('project_id', projectId);
+    form.append('names', names);
+    const res = await fetch('/admin/register_batch', { method: 'POST', body: form });
+    const data = await res.json();
+
+    if (data.status === 'success') {
+        const linksDiv = document.getElementById('invite-links');
+        linksDiv.innerHTML = data.invitations.map(inv =>
+            `<div style="padding:8px 0; border-bottom:1px solid var(--border); font-size:0.85rem;">
+                <strong>${inv.display_name}</strong>: <a href="${inv.invite_link}" target="_blank" style="color:var(--primary)">${inv.invite_link}</a>
+                <button class="btn btn-sm btn-secondary" style="margin-left:8px" onclick="navigator.clipboard.writeText('${inv.invite_link}'); toast('Copiado')">📋</button>
+            </div>`
+        ).join('');
+        document.getElementById('invites-card').style.display = 'block';
+        toast(`${data.registered} participantes registrados`);
+    }
+}
+
+async function loadParticipants() {
+    const projectId = document.getElementById('monitor-project').value;
+    if (!projectId) return;
+    const data = await api(`/admin/participants/${projectId}`);
+    const tbody = document.getElementById('participants-table');
+    tbody.innerHTML = (data.participants || []).map(p => `
+        <tr>
+            <td>${p.display_name || p.participant_id.slice(0, 10)}</td>
+            <td><span class="badge badge-${p.status}">${p.status}</span></td>
+            <td>${p.turn_count || 0}</td>
+            <td>${p.emotional_register || '-'}</td>
+            <td style="font-size:0.8rem; color:var(--text3)">${p.last_message_at ? new Date(p.last_message_at).toLocaleString() : '-'}</td>
+            <td><button class="btn btn-sm btn-secondary" onclick="openWoz('${p.participant_id}')">💬</button></td>
+        </tr>
+    `).join('');
+}
+
+// --- WoZ ---
+async function loadWozParticipants() {
+    const data = await api('/admin/projects');
+    const projects = data.projects || [];
+    let allParticipants = [];
+    for (const p of projects) {
+        if (p.status !== 'active') continue;
+        const pdata = await api(`/admin/participants/${p.project_id}`);
+        for (const pt of (pdata.participants || [])) {
+            if (pt.status === 'active') {
+                allParticipants.push({ ...pt, project_name: p.name, project_id: p.project_id });
+            }
+        }
+    }
+    const sel = document.getElementById('woz-participant');
+    sel.innerHTML = '<option value="">-- Seleccionar --</option>' +
+        allParticipants.map(p => `<option value="${p.participant_id}" data-project="${p.project_id}">${p.display_name || p.participant_id.slice(0,10)} (${p.project_name})</option>`).join('');
+}
+
+function openWoz(participantId) {
+    showSection('wizard');
+    document.getElementById('woz-participant').value = participantId;
+    loadConversation();
+}
+
+async function loadConversation() {
+    const participantId = document.getElementById('woz-participant').value;
+    if (!participantId) return;
+    const data = await api(`/admin/conversation/${participantId}`);
+    const container = document.getElementById('chat-container');
+    const turns = data.turns || [];
+    if (!turns.length) {
+        container.innerHTML = '<p style="color:var(--text3); text-align:center; padding:40px;">Sin mensajes aún</p>';
+        return;
+    }
+    container.innerHTML = turns.map(t => `
+        <div class="msg msg-user">${t.user_text}<div class="msg-meta">${t.emotional_register || ''} • ${t.speech_act || ''}</div></div>
+        <div class="msg msg-val">${t.val_response}<div class="msg-meta">${t.directive_applied ? '🧙 Directiva aplicada' : ''} • ${new Date(t.timestamp).toLocaleTimeString()}</div></div>
+    `).join('');
+    container.scrollTop = container.scrollHeight;
+}
+
+async function injectDirective() {
+    const sel = document.getElementById('woz-participant');
+    const participantId = sel.value;
+    const option = sel.options[sel.selectedIndex];
+    const projectId = option?.dataset?.project || 'demo';
+    const content = document.getElementById('woz-directive').value;
+    const urgency = document.getElementById('woz-urgency').value;
+
+    if (!participantId || !content) return toast('Selecciona participante y escribe directiva');
+
+    const res = await api('/admin/inject_directive', {
+        method: 'POST',
+        body: JSON.stringify({ participant_id: participantId, project_id: projectId, content, urgency, cycle_id: 1 })
+    });
+
+    if (res.status === 'success') {
+        toast('Directiva inyectada ✓');
+        document.getElementById('woz-directive').value = '';
+        loadDirectiveHistory(projectId);
+    }
+}
+
+async function loadDirectiveHistory(projectId) {
+    const data = await api(`/admin/directives/${projectId}`);
+    const div = document.getElementById('directive-history');
+    const directives = data.directives || [];
+    if (!directives.length) return;
+    div.innerHTML = directives.slice(0, 10).map(d => `
+        <div style="padding:8px 0; border-bottom:1px solid var(--border); font-size:0.85rem;">
+            <span class="badge badge-${d.status === 'APPLIED' ? 'active' : 'invited'}">${d.status}</span>
+            <span style="color:var(--text2); margin-left:8px;">${d.content.slice(0, 60)}...</span>
+        </div>
+    `).join('');
+}
+
+// --- Export ---
+function exportData(format) {
+    const projectId = document.getElementById('export-project').value;
+    if (!projectId) return toast('Selecciona un proyecto');
+    window.open(`/admin/export/${projectId}?format=${format}`, '_blank');
+}
+
+async function generateReport() {
+    const projectId = document.getElementById('report-project').value;
+    if (!projectId) return toast('Selecciona un proyecto');
+    const report = await api(`/admin/report/${projectId}`);
+    const out = document.getElementById('report-output');
+    out.innerHTML = `
+        <div class="card" style="margin-top:12px; background: var(--surface2);">
+            <h3>📊 ${report.project?.name || 'Reporte'}</h3>
+            <div class="kpi-grid" style="margin: 16px 0;">
+                <div class="kpi"><div class="value">${report.kpis?.participation_rate_pct || 0}%</div><div class="label">Participación</div></div>
+                <div class="kpi"><div class="value">${report.kpis?.active_participants || 0}</div><div class="label">Activos</div></div>
+                <div class="kpi"><div class="value">${report.kpis?.average_turns_per_participant || 0}</div><div class="label">Turnos Promedio</div></div>
+                <div class="kpi"><div class="value">${report.kpis?.total_dialogue_turns || 0}</div><div class="label">Turnos Totales</div></div>
+            </div>
+            <p style="color:var(--text2); font-size:0.85rem;"><strong>Emociones:</strong> ${JSON.stringify(report.emotional_distribution || {})}</p>
+            <p style="color:var(--text2); font-size:0.85rem; margin-top:8px;"><strong>Temas:</strong> ${JSON.stringify(report.top_topics || {})}</p>
+            <p style="color:var(--text2); font-size:0.85rem; margin-top:8px;"><strong>WoZ:</strong> ${report.wizard_of_oz?.applied || 0} aplicadas, ${report.wizard_of_oz?.pending || 0} pendientes</p>
+        </div>
+    `;
+}
+
+async function closeProject() {
+    const projectId = document.getElementById('close-project').value;
+    if (!projectId) return toast('Selecciona un proyecto');
+    if (!confirm('¿Cerrar este piloto? Se notificará a todos los participantes.')) return;
+    const res = await api('/admin/close_project', {
+        method: 'POST',
+        body: JSON.stringify({ project_id: projectId, send_farewell: true })
+    });
+    if (res.status === 'success') {
+        toast('Piloto cerrado exitosamente');
+        loadProjectSelectors();
+    }
+}
+
+// --- Setup ---
+async function setupWebhook() {
+    const token = document.getElementById('setup-token').value;
+    const ngrok = document.getElementById('setup-ngrok').value;
+    if (!token || !ngrok) return toast('Token y URL son requeridos');
+    const res = await api('/admin/setup-webhook', {
+        method: 'POST',
+        body: JSON.stringify({ telegram_token: token, ngrok_url: ngrok })
+    });
+    document.getElementById('setup-result').innerHTML =
+        `<span style="color: ${res.status === 'success' ? 'var(--accent)' : 'var(--danger)'}">${res.message}</span>`;
+}
+
+// Initial load
+loadOverview();
+</script>
+</body>
+</html>
