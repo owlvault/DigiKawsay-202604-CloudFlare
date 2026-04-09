@@ -30,24 +30,34 @@ publisher = pubsub_v1.PublisherClient()
 gemini_client = None
 
 ANALYSIS_PROMPT = """\
-Eres un analista metodológico especializado en diagnósticos organizacionales.
-Analiza el siguiente fragmento de conversación y produce un JSON con este formato exacto:
+Eres un investigador metodológico experto en la IAP (Investigación Acción Participativa) de Orlando Fals Borda, analizando un proceso de transformación en un entorno corporativo digital. No eres un chatbot conversacional; eres un analista estructurado.
+
+Tu objetivo es leer un fragmento de una interacción entre un Colaborador y un facilitador (VAL), y extraer un diagnóstico profundo de la cultura y el poder organizacional basándote en:
+1. "Sentipensar": Cómo unen la racionalidad del proceso con la emoción o frustración.
+2. "Paridad Relacional": Cómo perciben las jerarquías y si se asumen como sujetos transformadores o subyugados por procesos burocráticos ("los de arriba" vs "nosotros").
+3. "Praxis": Si de su reflexión surge una intención de acción, o es mera resignación.
+4. "Saberes (Shadow IT)": El equivalente a los saberes populares. Herramientas, atajos o dinámicas informales no documentadas que realmente sostienen la operación.
+
+Analiza el texto y produce un JSON válido con la siguiente estructura y llaves:
 
 {
-  "collective_pattern": "INDIVIDUAL | COLECTIVO | MIXTO",
-  "power_dynamic": "HORIZONTAL | VERTICAL | AMBIGUO",
-  "emotional_depth": "SUPERFICIAL | MODERADO | PROFUNDO",
-  "shadow_indicators": ["lista de señales de Shadow IT, bypass burocrático o conocimiento tribal detectadas"],
-  "key_entities": ["procesos, departamentos, herramientas o personas mencionadas"],
-  "insight": "Un párrafo breve con la observación metodológica principal",
-  "confidence": 0.0 a 1.0,
-  "recommended_probe": "Una pregunta de seguimiento que el facilitador podría usar"
+  "fals_borda_metrics": {
+    "sentipensar_score": 0,
+    "praxis_indicator": "CATARSIS | REFLEXION_PASIVA | PROPUESTA_ACCION",
+    "relational_parity": "SUBMISION_JERARQUICA | PARIDAD | AISLAMIENTO"
+  },
+  "cultural_shadows": {
+    "saberes_detectados": ["lista de conocimientos no oficiales, Shadow IT o soluciones informales mencionadas"],
+    "oppressive_structures": ["normas burocráticas, cuellos de botella o barreras percibidas mencionadas"]
+  },
+  "methodological_insight": "Una evaluación profunda (2 líneas) sobre la dinámica de poder o movilización que se lee entre líneas.",
+  "recommended_woz_directive": "Recomendación para el facilitador humano para que le pida al agente VAL indagar más."
 }
 
 Fragmento a analizar:
-Emoción detectada: {emotion}
-Temas previos: {topics}
-Texto: "{text}"
+Emoción reportada: {emotion}
+Contexto: {topics}
+Aporte: "{text}"
 
 Responde SOLO con el JSON, sin markdown ni explicaciones adicionales.
 """
@@ -98,22 +108,27 @@ def _heuristic_fallback(text: str) -> dict:
     """Fallback heuristic analysis when Gemini is unavailable."""
     text_lower = text.lower()
 
-    collective_words = ["nosotros", "juntos", "comunidad", "acuerdo", "equipo", "todos"]
+    action_words = ["deberíamos", "propongo", "cambiar", "podemos", "hagamos"]
     shadow_words = ["whatsapp", "excel", "a mano", "por fuera", "pregúntale a"]
+    submissive_words = ["el jefe", "recursos humanos", "los de arriba", "ellos mandan", "no podemos"]
 
-    is_collective = any(kw in text_lower for kw in collective_words)
+    is_action = any(kw in text_lower for kw in action_words)
     has_shadow = [kw for kw in shadow_words if kw in text_lower]
+    is_submissive = any(kw in text_lower for kw in submissive_words)
 
     return {
-        "collective_pattern": "COLECTIVO" if is_collective else "INDIVIDUAL",
-        "power_dynamic": "AMBIGUO",
-        "emotional_depth": "MODERADO",
-        "shadow_indicators": has_shadow,
-        "key_entities": [],
-        "insight": "Análisis heurístico (Gemini no disponible). "
-                   + ("Patrón colectivo detectado." if is_collective else "Declaración individual."),
-        "confidence": 0.4,
-        "recommended_probe": "¿Cómo se relaciona esto con otros procesos del equipo?",
+        "fals_borda_metrics": {
+            "sentipensar_score": 5,
+            "praxis_indicator": "PROPUESTA_ACCION" if is_action else "CATARSIS",
+            "relational_parity": "SUBMISION_JERARQUICA" if is_submissive else "PARIDAD"
+        },
+        "cultural_shadows": {
+            "saberes_detectados": has_shadow,
+            "oppressive_structures": ["Bloqueo burocrático (heurística)"] if is_submissive else []
+        },
+        "methodological_insight": "Análisis heurístico (Gemini no disponible). "
+                   + ("Fuerte indicio de sumisión jerárquica." if is_submissive else "Dinámica relacional estándar."),
+        "recommended_woz_directive": "Pregunta cómo podrían organizar mejor esa idea sin depender de jerarquías tradicionales.",
         "_fallback": True,
     }
 
