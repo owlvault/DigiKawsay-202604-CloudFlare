@@ -39,51 +39,31 @@ services:
       timeout: 5s
       retries: 10
 
-  # 3. Emulador de Google Cloud Pub/Sub
-  pubsub-emulator:
-    image: gcr.io/google.com/cloudsdktool/cloud-sdk:emulators
-    container_name: digikawsay-pubsub
-    ports:
-      - "8085:8085"
-    command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8085"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  # 4. Inicializador de Pub/Sub Topics
-  pubsub-init:
-    image: gcr.io/google.com/cloudsdktool/cloud-sdk:latest
-    container_name: digikawsay-pubsub-init
-    depends_on:
-      pubsub-emulator:
-        condition: service_healthy
+  # 3. Cloudflare Tunnels (Zero Trust)
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: digikawsay-tunnel
+    command: tunnel run
     environment:
-      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
-      CLOUDSDK_AUTH_DISABLE_CREDENTIALS: 1
-      CLOUDSDK_CORE_PROJECT: digikawsay
-    volumes:
-      - ./infra/pubsub_init.sh:/scripts/pubsub_init.sh
-    entrypoint: [ "bash", "-c", "sleep 5 && bash /scripts/pubsub_init.sh digikawsay" ]
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    restart: always
 
   # -- Microservicios DigiKawsay (con Dockerfiles) --
 
   channel-layer:
     build: ./src/channel-layer
     container_name: digikawsay-channel
-    depends_on:
-      pubsub-emulator:
-        condition: service_healthy
     ports:
       - "8001:8080"
     environment:
-      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
       GCP_PROJECT_ID: digikawsay
       PUBSUB_INBOUND_TOPIC: iap.channel.inbound
       PUBSUB_OUTBOUND_SUB: channel-outbound-sub
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       DATABASE_URL: postgresql://digikawsay_app:local_password_123@postgres:5432/digikawsay
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/val-sa-key.json
+    volumes:
+      - ./infra/val-sa-key.json:/secrets/val-sa-key.json:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 10s
@@ -95,29 +75,26 @@ services:
     build: ./src/preprocessor
     container_name: digikawsay-preprocessor
     depends_on:
-      pubsub-emulator:
-        condition: service_healthy
       weaviate:
         condition: service_healthy
     environment:
-      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
       GCP_PROJECT_ID: digikawsay
       WEAVIATE_URL: http://weaviate:8080
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/val-sa-key.json
+    volumes:
+      - ./infra/val-sa-key.json:/secrets/val-sa-key.json:ro
     restart: on-failure
 
   val-service:
     build: ./src/val-service
     container_name: digikawsay-val
     depends_on:
-      pubsub-emulator:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       weaviate:
         condition: service_healthy
     environment:
-      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
       GCP_PROJECT_ID: digikawsay
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/val-sa-key.json
       GEMINI_API_KEY: ${GEMINI_API_KEY}
@@ -131,14 +108,11 @@ services:
     build: ./src/agente00-service
     container_name: digikawsay-agente00
     depends_on:
-      pubsub-emulator:
-        condition: service_healthy
       postgres:
         condition: service_healthy
     ports:
       - "8002:8000"
     environment:
-      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
       GCP_PROJECT_ID: digikawsay
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/val-sa-key.json
       DATABASE_URL: postgresql://digikawsay_app:local_password_123@postgres:5432/digikawsay
@@ -155,13 +129,12 @@ services:
   ag-05-service:
     build: ./src/ag-05-service
     container_name: digikawsay-ag05
-    depends_on:
-      pubsub-emulator:
-        condition: service_healthy
     environment:
-      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
       GCP_PROJECT_ID: digikawsay
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/val-sa-key.json
+    volumes:
+      - ./infra/val-sa-key.json:/secrets/val-sa-key.json:ro
     restart: on-failure
 
 volumes:
