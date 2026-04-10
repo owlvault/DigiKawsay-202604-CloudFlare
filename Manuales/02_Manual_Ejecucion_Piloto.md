@@ -1,58 +1,50 @@
-# Manual de Ejecución de Pilotos DigiKawsay
+# Manual de Ejecución de Pilotos DigiKawsay (Cloudflare Version)
 
-Este manual guía al encargado del proyecto o líder de innovación en el proceso paso a paso de ejecutar un piloto controlado utilizando DigiKawsay.
+Este manual guía al encargado del proyecto o líder de innovación en el proceso paso a paso de ejecutar un piloto controlado utilizando DigiKawsay `v3` sobre la plataforma Cloudflare Serverless.
 
-## Fase 1: Pre-requisitos y Lanzamiento del Sistema
+## Fase 1: Pre-requisitos y Configuración Inicial
 
-Un piloto requiere que los servicios de DigiKawsay estén funcionando localmente. 
-1. Asegúrate de tener **Docker Desktop** en ejecución.
-2. Verifica que tienes un archivo `.env` configurado en la raíz del proyecto con tus credenciales: `TELEGRAM_BOT_TOKEN` y `GEMINI_API_KEY`.
-3. Ejecuta el script de lanzamiento:
-   ```powershell
-   .\scripts\launch_pilot.ps1
+Todo el despliegue es ahora nativo en la nube, por lo que **ya no necesitas instalar Docker ni túneles Ngrok**; sin embargo, requieres tener acceso a la Consola para compilar y empujar el worker, y generar herramientas secretas.
+
+1. Abre tu terminal ubicándote en la carpeta `src/worker-digikawsay`.
+2. Opcionalmente, inicia sesión en la infraestructura mundial:
+   ```bash
+   npx wrangler login
    ```
-4. Nota: El script levantará un túnel **Ngrok** automáticamente y conectará el Webhook de Telegram. Lee el output de la terminal para encontrar la URL del Panel de Control (usualmente `http://localhost:8002/admin`).
+3. Asegura la correcta inyección de llaves seguras (Secretos) necesarias para la supervivencia del ambiente:
+   ```bash
+   npx wrangler secret put GEMINI_API_KEY
+   npx wrangler secret put TELEGRAM_BOT_TOKEN
+   ```
+   *(Importante: Pega el valor proporcionado generosamente por las plataformas BotFather/Google).*
 
-## Fase 2: Configuración del Proyecto
+## Fase 2: Lanzamiento del Servidor al Borde de la Red (Edge)
 
-Abre el **Panel de Control** en tu navegador.
+1. Sube tu aplicación nativa e inicia la máquina mundial escribiendo un simple comando:
+   ```bash
+   npm run deploy
+   ```
+2. Al terminar la compilación en milisegundos, notarás que te entrega una URL propia de la red global de Cloudflare terminada en `workers.dev`.
+   - *Ejemplo: `https://worker-digikawsay.camilo-carvajalino.workers.dev`*
+3. **El Asistente Webhook:** Abre ese enlace en tu navegador adhiriéndole el comando `/admin/setup_telegram`. Allí observarás un panel de interfaz HTML seguro; pulsa un botón para forzar que el Bot de Telegram envíe todo su influjo directamente a ese túnel encriptado permanentemente.
 
-1. Ve a la sección **📁 Proyectos**.
-2. **Crear Nuevo Piloto:**
-   - **Nombre:** Da un nombre identificable (ej. "Diagnóstico Área Operativa Q3").
-   - **Pregunta Provocadora (Seed Prompt):** Esta es la semilla del foro. En lugar de hacer una pregunta cerrada, plantea un escenario de reflexión. *Ejemplo: "¿Cómo sienten que fluye la información cuando un requerimiento crítico entra de urgencia al área?"*
-   - Define duración y máximo de participantes.
-   - Haz clic en **Crear Piloto**.
+## Fase 3: Configuración del Proyecto y Adición de Participantes
 
-## Fase 3: Registro y Onboarding de Participantes
+Los endpoints REST de administración de la base de datos distribuida `D1` sustituyen al Control Panel interactivo en esta iteración MVP en las nubes. 
 
-El sistema requiere invitaciones cerradas para mantener la integridad de los datos.
-
-1. Ve a la sección **👥 Participantes**.
-2. Selecciona tu proyecto en el menú desplegable.
-3. En **Nombres**, ingresa la lista de participantes (uno por línea). Pueden ser seudónimos si deseas doble anonimato.
-4. Haz clic en **Registrar y Generar Invitaciones**.
-5. **Distribución:** El sistema generará una lista de enlaces únicos (`https://t.me/TuBot?start=ABCD123`). Copia cada link y envíaselo personalmente a cada participante por WhatsApp, Slack o correo.
+1. **Crear Nuevo Piloto:** Envía una solicitud por consola JSON hacia `/admin/create_project` estableciendo la *Pregunta Provocadora (Seed Prompt)*. 
+   - *Ejemplo: "¿Cómo sienten que fluye la información cuando un requerimiento entra de urgencia?"*
+2. **Distribución y Cierre:** Con el token generado que el endpoint te retorne, distribuye enlaces únicos (`https://t.me/TuBot?start=ABCD123`) a tus personas de interés a través de Slack, correo o WhatsApp. Esto permite un control hermético y anónimo de los diálogos cualitativos.
 
 ## Fase 4: Monitoreo Activo (Fase de Vida)
 
-Mientras los participantes interactúan con el bot de Telegram, el líder del piloto debe monitorear el pulso.
+Mientras los participantes interactúan asíncronamente con el chatbot, el líder del piloto debe monitorear el flujo global. A diferencia de las iteraciones anteriores con emuladores locales paralelos, cualquier mensaje es captado casi intercontinentalmente antes de invocar la red geminiana `@langchain/google-genai`.
 
-1. Usa la vista **📊 Overview** para ver la "Tasa de Participación" (cuántos invitados han hablado) y el volumen de turnos.
-2. Usa la vista **👥 Participantes** para observar quién está estancado o no ha respondido. 
-   - Notarás etiquetas como `invited` (no han dado clic), `active` (hablando), `withdrawn` (pidieron salir).
-3. **El Facilitador Activo:** Dile a tu investigador cualitativo que use el "Wizard of Oz" para inyectar directivas. Revisa el *[Manual del Facilitador](03_Manual_Facilitador.md)*.
+- **El Facilitador Activo:** Dile a tu investigador cualitativo que use el protocolo REST de "Wizard of Oz" disparándole peticiones con `urgency` al nuevo `/admin/inject_directive`. Esas directivas las leerá la Memoria Corta SQLite del Agente. Revisa el *[Manual del Facilitador](03_Manual_Facilitador.md)*.
 
 ## Fase 5: Cierre y Recolección de Frutos
 
-Cuando pase el tiempo estipulado (o se note saturación teórica):
-
-1. Ve a la sección **📤 Exportar**.
-2. **Generar Reporte:** Selecciona tu proyecto y presiona "Generar Reporte". El sistema construirá un análisis demográfico, temático y emocional del piloto. Copia estos insights.
-3. **Exportar JSON/CSV:** Para análisis futuro (o respaldos), descarga las transcripciones completas.
-4. **Cerrar Piloto:** Selecciona el proyecto y presiona **🔒 Cerrar Piloto**. 
-   - Esto actualizará el estado de la base de datos.
-   - Automáticamente enviará un mensaje de despedida y agradecimiento por Telegram a todos los involucrados, cerrando la posibilidad de nuevos mensajes en ese contexto.
+Cuando pase el tiempo estipulado (o se note saturación teórica), puedes recurrir a exportar directamente de la tabla central de la base de datos D1 del sistema o conectarlo al PowerBI de administración central vía Queries asíncronos. 
 
 ---
-*Fin del Manual de Ejecución.*
+*Fin del Manual de Ejecución Serverless.*

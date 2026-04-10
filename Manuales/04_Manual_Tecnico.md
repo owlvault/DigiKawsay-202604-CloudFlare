@@ -1,39 +1,38 @@
-# DigiKawsay: Manual Técnico y de Arquitectura
+# DigiKawsay: Manual Técnico y de Arquitectura (v3)
 
-## 1. Arquitectura del Sistema
+## 1. Arquitectura del Sistema (Edge Native)
 
-DigiKawsay está construido sobre una arquitectura orientada a eventos (Event-Driven Architecture) basada en **microservicios Dockerizados** y comunicados de manera asíncrona mediante un bus de mensajes (Pub/Sub).
+DigiKawsay en su iteración v3 ha sido reconvertido de su sistema inicial de Clúster de Microservicios asíncronos distribuidos en Python (FastAPI/LangChain/Docker) a una arquitectura **unificada y sin fricción de la nube diseñada para Cloudflare Workers**. 
 
-### Componentes de Infraestructura
-- **PostgreSQL 15:** Persistencia primaria. Almacena las configuraciones de proyectos, registros de participantes, estados del diálogo de LangGraph (`dialogue_states`), turnos absolutos para análisis posterior (`dialogue_turns`) y directivas del facilitador (estado del WoZ).
-- **Weaviate v4:** Base de datos vectorial. Implementa almacenamiento de todo fragmento de interacción procesado, convertido a un vector de dimensión 768d, usado por el Módulo "Espejo" usando búsquedas `nearVector` de similitud por coseño.
-- **Google Cloud Pub/Sub Emulator:** Bus de mensajes. Desacopla los servicios permitiendo que si el "Cerebro" (VAL) colapsa por límites de cuota, el mensaje en Telegram no se pierda.
+Al operar directamente en los nodos Edge a nivel mundial, se reduce la latencia inter-componente a cero, y el tiempo de facturación local se extingue. Funciona sin contenedores ni simuladores de bus de mensajes de terceros.
 
-### Microservicios del Enjambre
-1. **Channel-Layer (`:8001`):** Servidor FastAPI que recibe el Webhook de Telegram. Gestiona el "Gate de Acceso" (validación de tokens de invitación profunda `/start`), los flujos de consentimiento, previene la saturación reenviando solo mensajes habilitados al PubSub, e imprime las respuestas que emanan al usuario en UI.
-2. **Preprocessor:** Lee de PubSub, realiza anonimización sintáctica básica de PII (RegEx para Correos, Cédulas, Celulares), usa el SDK de Google Gemini para obtener embeddings reales `text-embedding-004` del mensaje limpio, y empuja a Weaviate. Al tener éxito, inserta el `DIALOGUE_PACKET` formal en el bus.
-3. **VAL-Service:** El corazón sentipensante. Implementado con LangGraph. Utiliza `PostgresSaver` para memoria conversacional. Invoca siempre por prompt herramientas nativas para documentar emoción y acto de habla. En el `main.py`, ejecuta la función iterativa central de "El Espejo" (importada de `espejo.py`) para enviar reflexiones convergentes/divergentes cada N turnos.
-4. **Agente-00 (Supervisor):** Operando en (`:8002`), es el amo de calabozo. Sirve la UI estática del control panel WoZ. Expone >15 endpoints REST para crear proyectos, invitar participantes en batch, visualizar el chat cruzado, emitir reportes automatísticos, exportar CSVs y configurar los Webhooks automáticamente hacia el exterior (Ngrok).
-5. **Agente-05 (Metodólogo):** Analiza subrepticiamente cada turno. Usa `gemini-2.5-flash` para leer un turno, la emoción y entregar un JSON estructurado detectando Shadow IT, dinámicas de poder horizontales/verticales, etc.
+### Componentes de Infraestructura Actual
+- **Cloudflare D1 (SQLite Serverless):** Persistencia primaria. Almacena las configuraciones de proyectos, registros de código único de participantes, estados de invitaciones transaccionales y directivas de los administradores. Está distribuida, lo cual destruye la necesidad de clústeres rígidos de bases de datos como PostgreSQL.
+- **Hono.js:** El motor de enrutamiento rápido compatible universal. Sirve como la columna vertebral HTTP, interceptando el webhook de Telegram, gestionando endpoints de administración interna y proveyendo un asistente embebido (`/admin/setup_telegram`).
+- **LangChain.js / Google GenAI SDK:** Base cognitiva oficial alojada ahora en Javascript/TypeScript en `src/agent.ts`.
 
-## 2. Dependencias y Medio Ambiente
+### Lógica Transaccional (Worker-App)
+1. **El Handler de Webhook (`index.ts` / `/webhook`);** La puerta fronteriza estricta. Reemplaza el rol de aquel extinto `Channel-Layer` escrito en Python. Recupera la ID de Telegram (`chat_id`) e intercala en un subproceso V8 la función asincrónica principal de cognición mediante la tecnología estelar `ctx.waitUntil(...)`.
+2. **VAL-Router (LangGraph / `agent.ts`);** Reemplaza a las máquinas pseudo-autónomas y a RabbitMQ/PubSub. Lee inmediatamente el Prompt Sistémico que empuja la empatía social de la interacción ("Eres VAL, vanguardia del facilitador...") conectando bidireccionalmente el entorno Serverless hacia el cerebro remoto de `gemini-2.5-flash` pasándole la llave almacenada cifrada inmutablemente como secreto local. 
+3. **Cierre de Ciclo en Webhook:** Retransmite instantánea y síncronamente el resultado del LLM usando la API oficial `/sendMessage` de Telegram logrando contestarle a la comunidad desde la otra esquina del globo en su red local sin servidores en el intermedio.
+4. **Agente-00 (Management API):** Los scripts subyacentes REST a lo largo del `index.ts` (como `/admin/create_project` y `/admin/inject_directive`) emulan por API un eventual "Wizard of Oz". De momento son programables y directos a D1, quitando sobrecarga de frontend embebidos.
 
-El entorno requiere inyección en el `.env` raíz de:
-```env
-TELEGRAM_BOT_TOKEN="1234:AA..."
-GEMINI_API_KEY="AIza..."
+## 2. Medio Ambiente y Secretos de Wrangler
+
+El proyecto moderno omite radicalmente los archivos paralelos `.env` para producción. La nube confía rigurosamente en inyección remota y encriptada por parte del desarrollador (`wrangler secret put`):
+```text
+TELEGRAM_BOT_TOKEN
+GEMINI_API_KEY
 ```
-Todas las dependencias de Python están fijadas en un archivo `requirements.txt` por cada subdirectorio de microservicio, y construidas atómicamente por su propio `Dockerfile`.
+Estas variables estarán disponibles siempre mágicamente dentro del Contexto universal de un worker de Cloudflare HTTP Request sobreescribiendo el sistema de tipado subyacente. La declaración superficial se alberga en `wrangler.jsonc` excluyendo estas confidenciales.
 
-## 3. Despliegue en Producción o Piloto
+## 3. Despliegue en Producción
 
-Para ejecutar el despliegue automático del Swarm:
-```powershell
-.\scripts\launch_pilot.ps1
-```
-Este script (en PowerShell):
-1. Chequea que Docker exista y esté ejecutándose.
-2. Carga variables de `.env`.
-3. Ejecuta un `docker-compose up -d --build`.
-4. Utiliza `Invoke-RestMethod` iterativos como "Spin-lock" hasta que el Healthcheck general HTTP devuelva estabilización.
-5. Invoca un subproceso de Ngrok, secuestra su dirección HTTPS pública, y hace una petición final la api de Telegram para atar el Endpoint automáticamente.
+El modelo en Node.js hace obsoleto la virtualización por PowerShell (`launch_pilot.ps1`).  
+Teniendo instalado NodeJS base:
+1. Navega a `src/worker-digikawsay`
+2. Solicita la transpilación total e inyección global de Cloudflare:
+   ```bash
+   npm run deploy
+   ```
+El ecosistema completo nace y muere interactuando orgánicamente cada que una solicitud golpea las URL públicas de `.workers.dev`.
