@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "worker-digikawsay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-10",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "vars": {
+    "GCP_PROJECT_ID": "digikawsay",
+    "GCP_PUBSUB_TOPIC_INBOUND": "iap.channel.inbound",
+    "TELEGRAM_BOT_TOKEN": ""
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "digikawsay-d1",
+      "database_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    }
+  ]
+}
