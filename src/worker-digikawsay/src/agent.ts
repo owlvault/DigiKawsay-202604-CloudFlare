@@ -7,7 +7,7 @@ export async function runAgentCycle(input: string, threadId: string, geminiKey: 
 
   try {
     const llm = new ChatGoogleGenerativeAI({
-      modelName: "gemini-2.5-flash",
+      model: "gemini-2.5-flash",
       apiKey: geminiKey,
       temperature: 0.7,
       maxOutputTokens: 300,
