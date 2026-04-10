@@ -8,14 +8,13 @@
   ],
   "vars": {
     "GCP_PROJECT_ID": "digikawsay",
-    "GCP_PUBSUB_TOPIC_INBOUND": "iap.channel.inbound",
-    "TELEGRAM_BOT_TOKEN": ""
+    "GCP_PUBSUB_TOPIC_INBOUND": "iap.channel.inbound"
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "digikawsay-d1",
-      "database_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+      "database_id": "b972e126-3af6-4064-ba00-d339f5a9cedc"
     }
   ]
 }
