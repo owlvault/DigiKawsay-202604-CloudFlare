@@ -245,14 +245,43 @@
                 <div class="card-footer" id="error-rate">0% tasa de error</div>
             </div>
             <div class="card">
-                <div class="card-title">Costo Estimado</div>
-                <div class="card-value" id="billing-status">$ 0.00</div>
-                <div class="card-footer" id="account-name">ID: digikawsay</div>
+                <div class="card-title">🧠 Precisión AG-05</div>
+                <div class="card-value" id="kpi-ag05-precision" style="color:var(--success)">--</div>
+                <div class="card-footer" id="kpi-ag05-reviewed">turnos revisados por facilitador</div>
             </div>
             <div class="card">
-                <div class="card-title">Salud del Microservicio</div>
-                <div class="card-value" id="system-health">100%</div>
-                <div class="usage-bar"><div class="usage-fill" style="width: 100%"></div></div>
+                <div class="card-title">🧙 Efectividad Directivas</div>
+                <div class="card-value" id="kpi-directive-effectiveness">--</div>
+                <div class="card-footer" id="kpi-directive-count">directivas puntuadas</div>
+            </div>
+            <div class="card">
+                <div class="card-title">🤝 El Espejo</div>
+                <div class="card-value" id="kpi-espejo-coverage">--</div>
+                <div class="card-footer">cobertura en pilotos cerrados</div>
+            </div>
+            <div class="card">
+                <div class="card-title">⏱ Latencia VAL (24h)</div>
+                <div class="card-value" id="kpi-latency">--</div>
+                <div class="card-footer" id="kpi-turns-24h">turnos últimas 24h</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Salud del Sistema</div>
+                <div class="card-value" id="system-health-pct">--</div>
+                <div class="usage-bar"><div class="usage-fill" id="health-bar" style="width:0%"></div></div>
+                <div class="card-footer" id="flywheel-status" style="margin-top:8px">calculando...</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Proyectos · Participantes</div>
+                <div style="display:flex; gap:24px; align-items:baseline;">
+                    <div>
+                        <div class="card-value" id="kpi-active-projects">--</div>
+                        <div class="card-footer">activos</div>
+                    </div>
+                    <div>
+                        <div class="card-value" id="kpi-total-participants" style="font-size:1.5rem">--</div>
+                        <div class="card-footer">participantes</div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -267,20 +296,28 @@
                 <div class="card-title">Estado de la Colmena</div>
                 <div id="service-logs">
                     <div class="log-item">
-                        <span>val-service</span>
-                        <span class="tag tag-success">Active</span>
+                        <span>agente00-service</span>
+                        <span class="tag tag-success" id="svc-agente00">checking...</span>
                     </div>
                     <div class="log-item">
-                        <span>agente00-service</span>
-                        <span class="tag tag-success">Active</span>
+                        <span>val-service</span>
+                        <span class="tag tag-warning" id="svc-val">sin check</span>
+                    </div>
+                    <div class="log-item">
+                        <span>ag-05-service</span>
+                        <span class="tag tag-warning" id="svc-ag05">sin check</span>
                     </div>
                     <div class="log-item">
                         <span>postgres-db</span>
-                        <span class="tag tag-success">Healthy</span>
+                        <span class="tag tag-success" id="svc-postgres">checking...</span>
                     </div>
                     <div class="log-item">
                         <span>pubsub-emulator</span>
-                        <span class="tag tag-warning">Emulated</span>
+                        <span class="tag tag-warning">emulated</span>
+                    </div>
+                    <div class="log-item" style="margin-top:12px; border:none;">
+                        <span style="color:var(--text-muted); font-size:0.75rem;">Flywheel</span>
+                        <span class="tag" id="svc-flywheel" style="background:rgba(139,92,246,0.1);color:#a78bfa">--</span>
                     </div>
                 </div>
             </div>
@@ -288,7 +325,7 @@
     </div>
 
     <script>
-        // Init Chart
+        // ─── Chart de tráfico ──────────────────────────────────────────────────
         const ctx = document.getElementById('trafficChart').getContext('2d');
         let trafficChart = new Chart(ctx, {
             type: 'line',
@@ -296,7 +333,7 @@
                 labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', 'Ahora'],
                 datasets: [{
                     label: 'Peticiones por hora',
-                    data: [12, 19, 3, 5, 2, 3, 0],
+                    data: [0, 0, 0, 0, 0, 0, 0],
                     borderColor: '#8b5cf6',
                     background: 'transparent',
                     borderWidth: 3,
@@ -311,15 +348,112 @@
                 plugins: { legend: { display: false } },
                 scales: {
                     x: { grid: { display: false }, ticks: { color: '#64748b' } },
-                    y: { 
-                        beginAtZero: true, 
-                        grid: { color: 'rgba(255,255,255,0.05)' }, 
-                        ticks: { color: '#64748b' } 
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#64748b' }
                     }
                 }
             }
         });
 
+        // ─── Métricas del sistema (flywheel) ────────────────────────────────────
+        async function loadSystemHealth() {
+            try {
+                const metrics = await fetch('/admin/system_metrics').then(r => r.json());
+
+                // Calcular salud como promedio ponderado de métricas clave
+                const components = [];
+                if (metrics.ag05_turns_reviewed > 0)
+                    components.push(metrics.ag05_precision_pct);
+                if (metrics.directive_scored_count > 0)
+                    components.push((metrics.directive_effectiveness_avg / 5) * 100);
+                if (metrics.projects_closed > 0)
+                    components.push(metrics.espejo_coverage_pct);
+
+                const healthPct = components.length > 0
+                    ? Math.round(components.reduce((a, b) => a + b, 0) / components.length)
+                    : null;
+
+                // KPI salud
+                const hEl = document.getElementById('system-health-pct');
+                const hBar = document.getElementById('health-bar');
+                if (hEl) {
+                    hEl.textContent = healthPct !== null ? `${healthPct}%` : 'Sin datos';
+                    hEl.style.color = healthPct > 80 ? 'var(--success)' :
+                                      healthPct > 60 ? '#f59e0b' : 'var(--danger)';
+                }
+                if (hBar && healthPct !== null)
+                    hBar.style.width = `${Math.min(healthPct, 100)}%`;
+
+                // Tarjetas de métricas
+                const set = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+                set('kpi-ag05-precision', metrics.ag05_precision_pct > 0 ? `${metrics.ag05_precision_pct}%` : '--');
+                set('kpi-ag05-reviewed', `${metrics.ag05_turns_reviewed} turnos revisados`);
+                set('kpi-directive-effectiveness',
+                    metrics.directive_scored_count > 0
+                        ? `${metrics.directive_effectiveness_avg.toFixed(1)} / 5`
+                        : '--');
+                set('kpi-directive-count', `${metrics.directive_scored_count} directivas puntuadas`);
+                set('kpi-espejo-coverage',
+                    metrics.projects_closed > 0 ? `${metrics.espejo_coverage_pct}%` : '--');
+                set('kpi-active-projects', metrics.projects_active ?? '--');
+                set('kpi-total-participants', metrics.total_participants ?? '--');
+
+                // Latencia
+                const latMs = metrics.val_avg_latency_ms || 0;
+                const latEl = document.getElementById('kpi-latency');
+                if (latEl) {
+                    latEl.textContent = latMs > 0 ? `${latMs|0} ms` : '--';
+                    latEl.style.color = latMs < 3000 ? 'var(--success)' :
+                                        latMs < 6000 ? '#f59e0b' : 'var(--danger)';
+                }
+                set('kpi-turns-24h', `${metrics.turns_last_24h} turnos \u00faltimas 24h`);
+
+                // Flywheel status
+                const fwEl = document.getElementById('flywheel-status');
+                const fwTag = document.getElementById('svc-flywheel');
+                if (fwEl) fwEl.textContent = metrics.flywheel_ready
+                    ? '✅ Flywheel activo (≥50 turnos revisados)'
+                    : `⏳ Flywheel calentando... (${metrics.ag05_turns_reviewed}/50 revisados)`;
+                if (fwTag) {
+                    fwTag.textContent = metrics.flywheel_ready ? 'Ready' : 'Warming';
+                    fwTag.style.color = metrics.flywheel_ready ? '#06d6a0' : '#a78bfa';
+                }
+
+            } catch (e) {
+                console.warn('System metrics unavailable:', e);
+            }
+        }
+
+        // ─── Health check de servicios ─────────────────────────────────────────
+        async function loadSwarmStatus() {
+            // AGENTE-00 (propio)
+            try {
+                const r = await fetch('/health');
+                const d = await r.json();
+                const el = document.getElementById('svc-agente00');
+                if (el) el.className = 'tag tag-success';
+                if (el) el.textContent = 'online';
+                // Si AGENTE-00 responde, postgres también (usa la misma DB)
+                const pg = document.getElementById('svc-postgres');
+                if (pg) { pg.className = 'tag tag-success'; pg.textContent = 'healthy'; }
+            } catch {
+                const el = document.getElementById('svc-agente00');
+                if (el) { el.className = 'tag tag-danger'; el.textContent = 'offline'; }
+            }
+            // AG-05 (intenta /ag05_health — proxy route no implementado aún)
+            try {
+                const r = await fetch('/admin/ag05_health', { signal: AbortSignal.timeout(2000) });
+                const el = document.getElementById('svc-ag05');
+                if (el && r.ok) { el.className = 'tag tag-success'; el.textContent = 'online'; }
+            } catch {
+                const el = document.getElementById('svc-ag05');
+                if (el) { el.className = 'tag tag-warning'; el.textContent = 'sin check'; }
+            }
+        }
+
+        // ─── Monitor Gemini (existente) ────────────────────────────────────────
         async function updateDashboard() {
             try {
                 const response = await fetch('/api/monitor');
@@ -328,31 +462,34 @@
                 if (data.gemini) {
                     document.getElementById('total-calls').innerText = data.gemini.total || 0;
                     document.getElementById('quota-errors').innerText = data.gemini.quota_exceeded || 0;
-                    
-                    const errorPct = data.gemini.total > 0 ? ((data.gemini.quota_exceeded / data.gemini.total) * 100).toFixed(1) : 0;
+                    const errorPct = data.gemini.total > 0
+                        ? ((data.gemini.quota_exceeded / data.gemini.total) * 100).toFixed(1) : 0;
                     document.getElementById('error-rate').innerText = `${errorPct}% tasa de error de cuota`;
+                    // Actualizar gráfico si hay datos por hora
+                    if (data.gemini.by_hour) {
+                        trafficChart.data.datasets[0].data = data.gemini.by_hour;
+                        trafficChart.update();
+                    }
                 }
 
-                if (data.billing) {
-                    document.getElementById('billing-status').innerText = data.billing.billing_enabled ? "$ Active" : "$ Deactivated";
-                    document.getElementById('account-name').innerText = `Account: ${data.billing.billing_account || 'N/A'}`;
-                }
-
-                // Update health randomly for dynamic feel if healthy
-                if (data.health) {
-                    const healthVal = Math.floor(Math.random() * (100 - 98 + 1)) + 98;
-                    document.getElementById('system-health').innerText = `${healthVal}%`;
-                }
+                document.getElementById('connection-status').innerHTML =
+                    '<div class="pulse"></div> Sistema Online';
 
             } catch (err) {
-                console.error("Failed to fetch dashboard data", err);
-                document.getElementById('connection-status').innerHTML = '<div class="pulse" style="background: var(--danger)"></div> Sistema Offline';
+                console.error('Failed to fetch dashboard data', err);
+                document.getElementById('connection-status').innerHTML =
+                    '<div class="pulse" style="background: var(--danger)"></div> Sistema Offline';
             }
         }
 
-        // Intervalo de actualización
-        setInterval(updateDashboard, 5000);
+        // ─── Init ──────────────────────────────────────────────────────────────
+        loadSystemHealth();
+        loadSwarmStatus();
         updateDashboard();
+
+        setInterval(loadSystemHealth, 60000);  // cada 60s
+        setInterval(loadSwarmStatus, 30000);   // cada 30s
+        setInterval(updateDashboard, 10000);   // cada 10s
     </script>
 </body>
 </html>

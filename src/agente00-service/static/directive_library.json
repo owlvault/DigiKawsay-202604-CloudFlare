@@ -1,0 +1,99 @@
+{
+  "version": "1.0",
+  "directives": {
+    "CULTURA_ORGANIZACIONAL": [
+      {
+        "id": "CO-001",
+        "type": "QUESTION",
+        "urgency": "MEDIUM",
+        "theme": "Shadow IT",
+        "content": "Explora si el participante usa herramientas no oficiales para resolver problemas cotidianos",
+        "suggested_wording": "Me pregunto si hay formas creativas que el equipo ha encontrado para trabajar mejor..."
+      },
+      {
+        "id": "CO-002",
+        "type": "QUESTION",
+        "urgency": "MEDIUM",
+        "theme": "Decisiones reales",
+        "content": "Indaga el proceso real de toma de decisiones vs. el proceso formal declarado",
+        "suggested_wording": "Cuando hay que tomar una decisión importante, ¿cómo sucede realmente?"
+      },
+      {
+        "id": "CO-003",
+        "type": "REFRAME",
+        "urgency": "LOW",
+        "theme": "Estructuras de poder",
+        "content": "Reencuadra una queja como señal de un sistema con oportunidad de mejora",
+        "suggested_wording": "Eso que describes como un problema podría ser también una señal de algo que el equipo necesita pero no tiene todavía..."
+      },
+      {
+        "id": "CO-004",
+        "type": "CHALLENGE",
+        "urgency": "HIGH",
+        "theme": "Safe Harbor",
+        "content": "Si detectas distress: suspende exploración, valida la experiencia del participante",
+        "suggested_wording": "Lo que describes suena difícil. Antes de seguir, ¿cómo estás tú con todo esto?"
+      },
+      {
+        "id": "CO-005",
+        "type": "QUESTION",
+        "urgency": "LOW",
+        "theme": "Orgullo y logro",
+        "content": "Ancla en experiencias positivas para equilibrar el diagnóstico",
+        "suggested_wording": "¿Hay algún momento reciente donde hayas sentido que el equipo funcionó increíble?"
+      }
+    ],
+    "TRANSFORMACION_DIGITAL": [
+      {
+        "id": "TD-001",
+        "type": "QUESTION",
+        "urgency": "MEDIUM",
+        "theme": "Brecha de adopción",
+        "content": "Explora la brecha entre las herramientas implementadas y las que realmente se usan",
+        "suggested_wording": "De todo lo que se ha implementado digitalmente, ¿qué es lo que tu equipo realmente usa día a día?"
+      },
+      {
+        "id": "TD-002",
+        "type": "QUESTION",
+        "urgency": "MEDIUM",
+        "theme": "Pérdidas del cambio",
+        "content": "Explora qué se pierde con el cambio tecnológico (no solo lo que se gana)",
+        "suggested_wording": "Con todos los cambios que han venido, ¿hay algo que sientes que se perdió en el camino?"
+      },
+      {
+        "id": "TD-003",
+        "type": "REFRAME",
+        "urgency": "LOW",
+        "theme": "Inteligencia colectiva",
+        "content": "Reencuadra los workarounds como inteligencia colectiva, no como problema",
+        "suggested_wording": "Me parece interesante eso. Ese tipo de soluciones que el equipo inventa suelen esconder mucha inteligencia sobre lo que realmente se necesita..."
+      },
+      {
+        "id": "TD-004",
+        "type": "QUESTION",
+        "urgency": "HIGH",
+        "theme": "Visión de futuro",
+        "content": "Invita a co-diseñar el futuro desde la perspectiva del participante",
+        "suggested_wording": "Si pudieras cambiar una sola cosa de cómo trabajan digitalmente, ¿qué sería?"
+      }
+    ],
+    "INVESTIGACION_CUALITATIVA": [
+      {
+        "id": "IQ-001",
+        "type": "QUESTION",
+        "urgency": "LOW",
+        "theme": "Apertura",
+        "content": "Abre el espacio sin hipótesis previas — deja que el participante defina los temas",
+        "suggested_wording": "¿Por dónde quisieras empezar a hablar sobre esto?"
+      },
+      {
+        "id": "IQ-002",
+        "type": "REFRAME",
+        "urgency": "MEDIUM",
+        "theme": "Contraste",
+        "content": "Usa preguntas de contraste para revelar supuestos implícitos",
+        "suggested_wording": "¿Cómo sería diferente si...?"
+      }
+    ]
+  }
+}

@@ -114,8 +114,8 @@ def _load_pending_directives(participant_id: str):
 
 def _persist_turn(participant_id: str, project_id: str, user_text: str,
                   val_response: str, emotional_register: str, speech_act: str,
-                  topics: list, directive_applied: str, latency_ms: int):
-    """Persist a complete dialogue turn to the database."""
+                  topics: list, directive_applied: str, latency_ms: int) -> str | None:
+    """Persist a complete dialogue turn to the database. Returns the new turn_id."""
     try:
         conn = get_db()
         cur = conn.cursor()
@@ -129,14 +129,16 @@ def _persist_turn(participant_id: str, project_id: str, user_text: str,
         max_turn = cur.fetchone()['max_turn']
         turn_number = max_turn + 1
 
-        # Insert the turn
+        # Insert the turn and return turn_id
         cur.execute("""
             INSERT INTO dialogue_turns
                 (participant_id, project_id, turn_number, user_text, val_response,
                  emotional_register, speech_act, topics, directive_applied, latency_ms)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING turn_id
         """, (participant_id, project_id, turn_number, user_text, val_response,
               emotional_register, speech_act, topics, directive_applied, latency_ms))
+        turn_id = str(cur.fetchone()['turn_id'])
 
         # Upsert dialogue_states
         cur.execute("""
@@ -156,9 +158,12 @@ def _persist_turn(participant_id: str, project_id: str, user_text: str,
         conn.commit()
         cur.close()
         conn.close()
-        logger.info(f"Turn {turn_number} persisted for {participant_id}")
+        logger.info(f"Turn {turn_number} persisted for {participant_id} (turn_id={turn_id})")
+        return turn_id
     except Exception as e:
         logger.error(f"Error persisting turn: {e}")
+        return None
+
 
 
 def _mark_directives_applied(directive_ids: list, effect_summary: str = ""):
@@ -250,7 +255,7 @@ def process_dialogue_packet(message: pubsub_v1.subscriber.message.Message):
         directive_content = "; ".join(active_directives) if active_directives else None
 
         # 7. Persist turn to database
-        _persist_turn(
+        current_turn_id = _persist_turn(
             participant_id=participant_id,
             project_id=project_id_str,
             user_text=user_text,
@@ -299,6 +304,27 @@ def process_dialogue_packet(message: pubsub_v1.subscriber.message.Message):
                     logger.info(f"Espejo delivered for {participant_id}: "
                                f"{len(espejo_result.get('convergences', []))} convergences, "
                                f"{len(espejo_result.get('divergences', []))} divergences")
+
+                    # Marcar espejo_delivered en dialogue_turns para el flywheel
+                    if current_turn_id:
+                        try:
+                            conn = get_db()
+                            cur = conn.cursor()
+                            cur.execute("""
+                                UPDATE dialogue_turns
+                                SET espejo_delivered = TRUE,
+                                    espejo_payload = %s
+                                WHERE turn_id = %s
+                            """, (json.dumps({"espejo_text": espejo_text,
+                                             "convergences": espejo_result.get("convergences", []),
+                                             "divergences": espejo_result.get("divergences", [])}),
+                                            current_turn_id))
+                            conn.commit()
+                            cur.close()
+                            conn.close()
+                        except Exception as esp_db_err:
+                            logger.warning(f"No se pudo marcar espejo_delivered: {esp_db_err}")
+
             except Exception as espejo_err:
                 logger.warning(f"Espejo delivery failed: {espejo_err}")
 
