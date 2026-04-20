@@ -3,6 +3,24 @@ import { HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages
 
 const MAX_HISTORY_TURNS = 12; // últimos 6 intercambios
 
+const CLASSIFICATION_PROMPT = `Analiza este fragmento de una investigación organizacional en español.
+
+Texto: "{TEXT}"
+
+Responde SOLO con JSON válido, sin markdown ni explicaciones adicionales:
+{
+  "emotional_register": "OPEN",
+  "praxis_indicator": "REFLEXION_PASIVA",
+  "saberes_detectados": [],
+  "oppressive_structures": []
+}
+
+Criterios de clasificación:
+- emotional_register: OPEN (dispuesto/esperanzado), GUARDED (cauteloso/ambiguo), RESISTANT (rechaza/niega utilidad), DISTRESSED (angustia o agotamiento severo), NEUTRAL (descriptivo sin carga)
+- praxis_indicator: PROPUESTA_ACCION (propone un cambio concreto o solución), CATARSIS (queja o frustración sin propuesta), REFLEXION_PASIVA (describe, observa o narra sin dirección)
+- saberes_detectados: herramientas no oficiales (excel propio, whatsapp grupos, papel y lapiz), workarounds, conocimiento tacito no documentado — lista vacía si no hay
+- oppressive_structures: jerarquía bloqueante, burocracia excesiva, silos, falta de recursos, procesos rotos — lista vacía si no hay`;
+
 const VAL_BASE_PROMPT = `Eres VAL, facilitador de investigación organizacional de la plataforma DigiKawsay.
 Tu marco conceptual es la Investigación Acción Participativa (IAP) de Orlando Fals Borda.
 
@@ -39,6 +57,15 @@ export interface AgentResult {
   emotional_register: string;
   praxis_indicator: string;
   directive_applied: string | null;
+  saberes_detectados: string[];
+  oppressive_structures: string[];
+}
+
+interface ClassificationResult {
+  emotional_register: string;
+  praxis_indicator: string;
+  saberes_detectados: string[];
+  oppressive_structures: string[];
 }
 
 export interface AgentParams {
@@ -50,26 +77,58 @@ export interface AgentParams {
   geminiKey: string;
 }
 
-function detectEmotion(text: string): string {
+function _heuristicClassification(text: string): ClassificationResult {
   const t = text.toLowerCase();
   const distress = ["no puedo más", "colapso", "burnout", "desesper", "ansiedad severa", "deprim", "quiero renunciar"];
   const resistant = ["pérdida de tiempo", "no tiene sentido", "no sirve para nada", "obligados", "forzados a", "no queremos"];
   const guarded = ["depende", "no estoy seguro", "tal vez", "quizás", "puede ser", "no sé si"];
+  const accion = ["podríamos", "deberíamos", "propongo", "qué tal si", "se podría", "hagamos", "hay que cambiar", "una solución", "implementar"];
+  const catarsis = ["siempre hacemos lo mismo", "nunca funciona", "es un desastre", "cansado de", "harto de", "nadie escucha", "imposible trabajar"];
+  const shadowIt = ["excel", "whatsapp", "papel", "a mano", "por fuera", "sin sistema", "cuaderno", "google sheets", "drive personal"];
 
-  if (distress.some(k => t.includes(k))) return "DISTRESSED";
-  if (resistant.some(k => t.includes(k))) return "RESISTANT";
-  if (guarded.some(k => t.includes(k))) return "GUARDED";
-  return "OPEN";
+  const emotional_register = distress.some(k => t.includes(k)) ? "DISTRESSED"
+    : resistant.some(k => t.includes(k)) ? "RESISTANT"
+    : guarded.some(k => t.includes(k)) ? "GUARDED"
+    : "OPEN";
+
+  const praxis_indicator = accion.some(k => t.includes(k)) ? "PROPUESTA_ACCION"
+    : catarsis.some(k => t.includes(k)) ? "CATARSIS"
+    : "REFLEXION_PASIVA";
+
+  const saberes_detectados = shadowIt.filter(k => t.includes(k));
+
+  return { emotional_register, praxis_indicator, saberes_detectados, oppressive_structures: [] };
 }
 
-function detectPraxis(text: string): string {
-  const t = text.toLowerCase();
-  const accion = ["podríamos", "deberíamos", "propongo", "qué tal si", "se podría", "hagamos", "hay que cambiar", "mejorar esto", "una solución", "implementar"];
-  const catarsis = ["siempre hacemos lo mismo", "nunca funciona", "es un desastre", "cansado de", "harto de", "nadie escucha", "imposible trabajar", "frustrado"];
+async function classifyFragment(text: string, geminiKey: string): Promise<ClassificationResult> {
+  try {
+    const llm = new ChatGoogleGenerativeAI({
+      model: "gemini-2.5-flash",
+      apiKey: geminiKey,
+      temperature: 0.1,   // baja temperatura = clasificación consistente
+      maxOutputTokens: 200,
+    });
 
-  if (accion.some(k => t.includes(k))) return "PROPUESTA_ACCION";
-  if (catarsis.some(k => t.includes(k))) return "CATARSIS";
-  return "REFLEXION_PASIVA";
+    const prompt = CLASSIFICATION_PROMPT.replace("{TEXT}", text.slice(0, 600));
+    const result = await llm.invoke([new HumanMessage(prompt)]);
+    let raw = (result.content as string).trim();
+
+    // Limpiar si Gemini envuelve en markdown
+    if (raw.startsWith("```")) {
+      raw = raw.split("\n").slice(1).join("\n").replace(/```$/, "").trim();
+    }
+
+    const parsed = JSON.parse(raw) as ClassificationResult;
+    return {
+      emotional_register: parsed.emotional_register || "NEUTRAL",
+      praxis_indicator: parsed.praxis_indicator || "REFLEXION_PASIVA",
+      saberes_detectados: Array.isArray(parsed.saberes_detectados) ? parsed.saberes_detectados : [],
+      oppressive_structures: Array.isArray(parsed.oppressive_structures) ? parsed.oppressive_structures : [],
+    };
+  } catch {
+    // Fallback silencioso a heurística si Gemini falla o la respuesta no es JSON válido
+    return _heuristicClassification(text);
+  }
 }
 
 export async function runAgentCycle(params: AgentParams): Promise<AgentResult> {
@@ -81,6 +140,8 @@ export async function runAgentCycle(params: AgentParams): Promise<AgentResult> {
       emotional_register: "NEUTRAL",
       praxis_indicator: "REFLEXION_PASIVA",
       directive_applied: null,
+      saberes_detectados: [],
+      oppressive_structures: [],
     };
   }
 
@@ -117,8 +178,8 @@ export async function runAgentCycle(params: AgentParams): Promise<AgentResult> {
   }
   messages.push(new HumanMessage(input));
 
-  // 5. Invocar Gemini
-  const llm = new ChatGoogleGenerativeAI({
+  // 5. Invocar VAL y clasificar el fragmento en paralelo (sin latencia adicional)
+  const valLlm = new ChatGoogleGenerativeAI({
     model: "gemini-2.5-flash",
     apiKey: geminiKey,
     temperature: 0.7,
@@ -126,9 +187,13 @@ export async function runAgentCycle(params: AgentParams): Promise<AgentResult> {
   });
 
   let response: string;
+  let classification: ClassificationResult;
+
   try {
-    const result = await llm.invoke(messages);
-    response = result.content as string;
+    [{ content: response }, classification] = await Promise.all([
+      valLlm.invoke(messages).then(r => ({ content: r.content as string })),
+      classifyFragment(input, geminiKey),
+    ]);
   } catch (error: any) {
     const msg = error?.message || "";
     if (msg.includes("429") || msg.toLowerCase().includes("quota")) {
@@ -137,6 +202,8 @@ export async function runAgentCycle(params: AgentParams): Promise<AgentResult> {
         emotional_register: "NEUTRAL",
         praxis_indicator: "REFLEXION_PASIVA",
         directive_applied: null,
+        saberes_detectados: [],
+        oppressive_structures: [],
       };
     }
     throw error;
@@ -144,8 +211,10 @@ export async function runAgentCycle(params: AgentParams): Promise<AgentResult> {
 
   return {
     response,
-    emotional_register: detectEmotion(input),
-    praxis_indicator: detectPraxis(input),
+    emotional_register: classification.emotional_register,
+    praxis_indicator: classification.praxis_indicator,
     directive_applied: directive?.id ?? null,
+    saberes_detectados: classification.saberes_detectados,
+    oppressive_structures: classification.oppressive_structures,
   };
 }

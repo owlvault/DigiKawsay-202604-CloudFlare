@@ -137,15 +137,21 @@ async function handleMessage(text: string, chatId: number, env: Bindings): Promi
       `SELECT COUNT(*) as n FROM dialogue_turns WHERE participant_id = ? AND project_id = ?`
     ).bind(participant.participant_id, participant.project_id).first<{ n: number }>();
 
+    const analyticsJson = JSON.stringify({
+      saberes_detectados: result.saberes_detectados,
+      oppressive_structures: result.oppressive_structures,
+    });
+
     await db.prepare(
       `INSERT INTO dialogue_turns
          (turn_id, participant_id, project_id, cycle_id, turn_number,
-          user_text, val_response, emotional_register, speech_act, directive_applied, timestamp)
-       VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+          user_text, val_response, emotional_register, speech_act, directive_applied, topics, timestamp)
+       VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
     ).bind(
       turnId, participant.participant_id, participant.project_id,
       (countRow?.n ?? 0) + 1, text, result.response,
       result.emotional_register, result.praxis_indicator, result.directive_applied,
+      analyticsJson,
     ).run();
 
     // ── Actualizar estado del participante ───────────────────────────────
@@ -170,7 +176,11 @@ async function handleMessage(text: string, chatId: number, env: Bindings): Promi
     }
 
     await sendTelegram(env.TELEGRAM_BOT_TOKEN, chatId, result.response);
-    console.log(`[VAL] ${participant.display_name} | emo:${result.emotional_register} | praxis:${result.praxis_indicator}`);
+    console.log(
+      `[VAL] ${participant.display_name} | emo:${result.emotional_register} | praxis:${result.praxis_indicator}` +
+      (result.saberes_detectados.length ? ` | saberes:[${result.saberes_detectados.join(",")}]` : "") +
+      (result.oppressive_structures.length ? ` | opresion:[${result.oppressive_structures.join(",")}]` : "")
+    );
 
   } catch (err) {
     console.error("[handleMessage]", err);
