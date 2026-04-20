@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { runAgentCycle } from './agent';
-import { LobbyView, DashboardView, WozView } from './ui';
+import { LobbyView, DashboardView, WozView, AnalyticsView } from './ui';
 
 type Bindings = {
   DB: D1Database;
@@ -363,6 +363,113 @@ app.get('/admin/directives/:project_id', async (c) => {
      FROM wizard_directives WHERE project_id = ? ORDER BY created_at DESC`
   ).bind(projectId).all();
   return c.json({ directives: results });
+});
+
+// ── Analytics ──────────────────────────────────────────────────────────────
+
+async function computeAnalytics(projectId: string, db: D1Database) {
+  const project = await db.prepare(
+    `SELECT project_id, name FROM projects WHERE project_id = ?`
+  ).bind(projectId).first<{ project_id: string; name: string }>();
+  if (!project) return null;
+
+  // Totales
+  const totalRow = await db.prepare(
+    `SELECT COUNT(*) as total FROM dialogue_turns WHERE project_id = ?`
+  ).bind(projectId).first<{ total: number }>();
+
+  // Participantes con métricas
+  const { results: participantStats } = await db.prepare(
+    `SELECT p.participant_id, p.display_name, ds.turn_count, ds.emotional_register
+     FROM participants p
+     LEFT JOIN dialogue_states ds ON p.participant_id = ds.participant_id AND ds.project_id = p.project_id
+     WHERE p.project_id = ? AND p.consent_given = 1
+     ORDER BY ds.turn_count DESC`
+  ).bind(projectId).all<{ participant_id: string; display_name: string; turn_count: number; emotional_register: string }>();
+
+  // Distribución emocional
+  const { results: emotionRows } = await db.prepare(
+    `SELECT emotional_register, COUNT(*) as count FROM dialogue_turns
+     WHERE project_id = ? AND emotional_register IS NOT NULL
+     GROUP BY emotional_register`
+  ).bind(projectId).all<{ emotional_register: string; count: number }>();
+
+  // Distribución de praxis (guardada en speech_act)
+  const { results: praxisRows } = await db.prepare(
+    `SELECT speech_act, COUNT(*) as count FROM dialogue_turns
+     WHERE project_id = ? AND speech_act IS NOT NULL
+     GROUP BY speech_act`
+  ).bind(projectId).all<{ speech_act: string; count: number }>();
+
+  // Topics JSON para saberes y estructuras
+  const { results: topicsRows } = await db.prepare(
+    `SELECT topics FROM dialogue_turns WHERE project_id = ? AND topics IS NOT NULL`
+  ).bind(projectId).all<{ topics: string }>();
+
+  const saberesCount: Record<string, number> = {};
+  const structuresCount: Record<string, number> = {};
+  for (const row of topicsRows) {
+    try {
+      const parsed = JSON.parse(row.topics);
+      for (const s of (parsed.saberes_detectados || [])) {
+        saberesCount[s] = (saberesCount[s] || 0) + 1;
+      }
+      for (const s of (parsed.oppressive_structures || [])) {
+        structuresCount[s] = (structuresCount[s] || 0) + 1;
+      }
+    } catch { /* skip */ }
+  }
+
+  // Directivas pendientes
+  const pendingRow = await db.prepare(
+    `SELECT COUNT(*) as pending FROM wizard_directives WHERE project_id = ? AND status = 'PENDING'`
+  ).bind(projectId).first<{ pending: number }>();
+
+  const emotionDist: Record<string, number> = {};
+  for (const r of emotionRows) emotionDist[r.emotional_register] = Number(r.count);
+
+  const praxisDist: Record<string, number> = {};
+  for (const r of praxisRows) praxisDist[r.speech_act] = Number(r.count);
+
+  return {
+    project_id: project.project_id,
+    project_name: project.name,
+    total_turns: totalRow?.total ?? 0,
+    active_participants: (participantStats || []).filter(p => (p.turn_count ?? 0) > 0).length,
+    total_participants: (participantStats || []).length,
+    emotion_distribution: emotionDist,
+    praxis_distribution: praxisDist,
+    top_participants: (participantStats || []).slice(0, 15),
+    saberes_detectados: Object.entries(saberesCount)
+      .map(([saber, count]) => ({ saber, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 12),
+    oppressive_structures: Object.entries(structuresCount)
+      .map(([structure, count]) => ({ structure, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 12),
+    pending_directives: pendingRow?.pending ?? 0,
+  };
+}
+
+// JSON API
+app.get('/admin/analytics/:project_id', async (c) => {
+  const projectId = c.req.param('project_id');
+  const analytics = await computeAnalytics(projectId, c.env.DB);
+  if (!analytics) return c.json({ error: "Project not found" }, 404);
+  return c.json(analytics);
+});
+
+// SSR page
+app.get('/admin/analytics', async (c) => {
+  const { results: projects } = await c.env.DB.prepare(
+    `SELECT project_id, name FROM projects ORDER BY created_at DESC`
+  ).all<{ project_id: string; name: string }>();
+
+  const projectId = c.req.query('project_id') || (projects[0]?.project_id ?? '');
+  const analytics = projectId ? await computeAnalytics(projectId, c.env.DB) : null;
+
+  return c.html(<AnalyticsView projects={projects} projectId={projectId} analytics={analytics} />);
 });
 
 export default app;

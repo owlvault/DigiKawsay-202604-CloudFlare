@@ -28,10 +28,11 @@ export const Layout: FC<{ children: any }> = ({ children }) => (
          <div class="text-2xl font-bold bg-val-gradient bg-clip-text text-transparent mb-12">
             H+ DigiKawsay
          </div>
-         <nav class="flex-1 space-y-4">
+         <nav class="flex-1 space-y-2">
             <a href="/admin/lobby" class="block py-2 px-4 rounded hover:bg-white/10 transition">🚀 Lanzar Piloto</a>
-            <a href="/admin/dashboard" class="block py-2 px-4 rounded hover:bg-white/10 transition">📊 Tablero de Control</a>
+            <a href="/admin/dashboard" class="block py-2 px-4 rounded hover:bg-white/10 transition">👥 Participantes</a>
             <a href="/admin/woz" class="block py-2 px-4 rounded hover:bg-white/10 transition text-val-orange font-bold">👁️ Consola VAL</a>
+            <a href="/admin/analytics" class="block py-2 px-4 rounded hover:bg-white/10 transition">📈 Analítica del Equipo</a>
          </nav>
       </aside>
       <main class="flex-1 p-8 relative overflow-y-auto">
@@ -154,6 +155,208 @@ export const DashboardView: FC<{ projects: any[], participants: any[] }> = ({ pr
             </div>
           </div>
         </div>
+      )}
+    </Layout>
+  );
+};
+
+// ==========================================
+// Helpers for Analytics View
+// ==========================================
+
+const EMOTION_COLORS: Record<string, string> = {
+  OPEN:       'bg-green-500',
+  GUARDED:    'bg-yellow-400',
+  RESISTANT:  'bg-orange-500',
+  DISTRESSED: 'bg-red-600',
+  NEUTRAL:    'bg-slate-400',
+};
+
+const PRAXIS_COLORS: Record<string, string> = {
+  PROPUESTA_ACCION:  'bg-blue-500',
+  REFLEXION_PASIVA:  'bg-slate-400',
+  CATARSIS:          'bg-red-400',
+};
+
+const EmotionLabel: Record<string, string> = {
+  OPEN: 'Abierto', GUARDED: 'Cauteloso', RESISTANT: 'Resistente',
+  DISTRESSED: 'Angustia', NEUTRAL: 'Neutral',
+};
+
+const PraxisLabel: Record<string, string> = {
+  PROPUESTA_ACCION: 'Propuesta de Acción',
+  REFLEXION_PASIVA: 'Reflexión Pasiva',
+  CATARSIS: 'Catarsis',
+};
+
+function DistBar({ label, count, total, colorClass }: { label: string; count: number; total: number; colorClass: string }) {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  return (
+    <div class="mb-3">
+      <div class="flex justify-between text-sm mb-1">
+        <span class="font-medium text-slate-700">{label}</span>
+        <span class="text-slate-500 font-mono">{count} ({pct}%)</span>
+      </div>
+      <div class="w-full bg-slate-100 rounded-full h-3">
+        <div class={`${colorClass} h-3 rounded-full transition-all`} style={`width:${pct}%`}></div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// View 4: Analytics
+// ==========================================
+
+export const AnalyticsView: FC<{ projects: any[]; projectId: string; analytics: any }> = ({ projects, projectId, analytics }) => {
+  const totalEmotions = analytics ? Object.values(analytics.emotion_distribution as Record<string, number>).reduce((a: number, b: number) => a + b, 0) : 0;
+  const totalPraxis = analytics ? Object.values(analytics.praxis_distribution as Record<string, number>).reduce((a: number, b: number) => a + b, 0) : 0;
+
+  return (
+    <Layout>
+      {/* Header */}
+      <div class="flex flex-wrap justify-between items-center mb-8 gap-4">
+        <div>
+          <h1 class="text-4xl text-hplus-blue font-bold">Analítica del Equipo</h1>
+          {analytics && <p class="text-slate-500 mt-1">{analytics.project_name}</p>}
+        </div>
+        <form method="GET" action="/admin/analytics" class="flex gap-2">
+          <select name="project_id" class="p-2 border rounded text-sm bg-white shadow-sm">
+            {projects.map((p: any) => (
+              <option value={p.project_id} selected={p.project_id === projectId}>{p.name}</option>
+            ))}
+          </select>
+          <button type="submit" class="px-4 py-2 bg-hplus-blue text-white rounded text-sm shadow-sm hover:bg-blue-900 transition">
+            Ver
+          </button>
+        </form>
+      </div>
+
+      {!analytics ? (
+        <div class="glass-card p-8 text-center text-slate-500 rounded-xl">
+          No hay datos aún. Cuando los participantes inicien conversaciones, la analítica aparecerá aquí.
+        </div>
+      ) : (
+        <>
+          {/* KPIs */}
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            {[
+              { label: 'Turnos totales', value: analytics.total_turns, sub: 'mensajes analizados' },
+              { label: 'Participantes activos', value: `${analytics.active_participants} / ${analytics.total_participants}`, sub: 'con conversación' },
+              { label: 'Saberes detectados', value: analytics.saberes_detectados.length, sub: 'tipos únicos' },
+              { label: 'Directivas pendientes', value: analytics.pending_directives, sub: 'sin aplicar' },
+            ].map(kpi => (
+              <div class="glass-card p-5 rounded-xl shadow-sm text-center">
+                <div class="text-3xl font-bold text-hplus-blue mb-1">{kpi.value}</div>
+                <div class="text-sm font-semibold text-slate-700">{kpi.label}</div>
+                <div class="text-xs text-slate-400 mt-0.5">{kpi.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            {/* Distribución emocional */}
+            <div class="glass-card p-6 rounded-xl shadow-sm">
+              <h2 class="text-lg font-bold text-hplus-blue mb-4">Registro Emocional</h2>
+              {Object.entries(analytics.emotion_distribution as Record<string, number>)
+                .sort(([, a], [, b]) => b - a)
+                .map(([emotion, count]) => (
+                  <DistBar
+                    label={EmotionLabel[emotion] || emotion}
+                    count={count as number}
+                    total={totalEmotions}
+                    colorClass={EMOTION_COLORS[emotion] || 'bg-slate-400'}
+                  />
+                ))}
+              {totalEmotions === 0 && <p class="text-slate-400 text-sm">Sin datos de emoción aún.</p>}
+            </div>
+
+            {/* Distribución de praxis */}
+            <div class="glass-card p-6 rounded-xl shadow-sm">
+              <h2 class="text-lg font-bold text-hplus-blue mb-4">Indicador de Praxis (Fals Borda)</h2>
+              {Object.entries(analytics.praxis_distribution as Record<string, number>)
+                .sort(([, a], [, b]) => b - a)
+                .map(([praxis, count]) => (
+                  <DistBar
+                    label={PraxisLabel[praxis] || praxis}
+                    count={count as number}
+                    total={totalPraxis}
+                    colorClass={PRAXIS_COLORS[praxis] || 'bg-slate-400'}
+                  />
+                ))}
+              {totalPraxis === 0 && <p class="text-slate-400 text-sm">Sin datos de praxis aún.</p>}
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            {/* Shadow IT / Saberes */}
+            <div class="glass-card p-6 rounded-xl shadow-sm">
+              <h2 class="text-lg font-bold text-hplus-blue mb-1">Shadow IT y Saberes Tácitos</h2>
+              <p class="text-xs text-slate-400 mb-4">Herramientas no oficiales y conocimiento no documentado detectado</p>
+              {analytics.saberes_detectados.length === 0 ? (
+                <p class="text-slate-400 text-sm">Sin saberes detectados aún.</p>
+              ) : (
+                <div class="flex flex-wrap gap-2">
+                  {(analytics.saberes_detectados as Array<{ saber: string; count: number }>).map(({ saber, count }) => (
+                    <span class="px-3 py-1.5 bg-orange-50 border border-orange-200 text-orange-800 rounded-full text-sm font-medium">
+                      {saber} <span class="ml-1 text-orange-400 font-mono text-xs">×{count}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Estructuras opresivas */}
+            <div class="glass-card p-6 rounded-xl shadow-sm">
+              <h2 class="text-lg font-bold text-hplus-blue mb-1">Estructuras Opresivas</h2>
+              <p class="text-xs text-slate-400 mb-4">Barreras sistémicas y obstáculos detectados en el discurso</p>
+              {analytics.oppressive_structures.length === 0 ? (
+                <p class="text-slate-400 text-sm">Sin estructuras detectadas aún.</p>
+              ) : (
+                <div class="flex flex-wrap gap-2">
+                  {(analytics.oppressive_structures as Array<{ structure: string; count: number }>).map(({ structure, count }) => (
+                    <span class="px-3 py-1.5 bg-red-50 border border-red-200 text-red-800 rounded-full text-sm font-medium">
+                      {structure} <span class="ml-1 text-red-400 font-mono text-xs">×{count}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Tabla de participantes */}
+          <div class="glass-card p-6 rounded-xl shadow-sm">
+            <h2 class="text-lg font-bold text-hplus-blue mb-4">Profundidad por Participante</h2>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm text-left">
+                <thead class="text-xs text-hplus-blue uppercase bg-blue-50/50">
+                  <tr>
+                    <th class="px-4 py-3">Participante</th>
+                    <th class="px-4 py-3 text-center">Turnos</th>
+                    <th class="px-4 py-3 text-center">Emoción actual</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(analytics.top_participants as Array<{ display_name: string; turn_count: number; emotional_register: string }>)
+                    .map(p => (
+                      <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
+                        <td class="px-4 py-3 font-semibold">{p.display_name}</td>
+                        <td class="px-4 py-3 text-center font-mono font-bold text-hplus-blue">{p.turn_count || 0}</td>
+                        <td class="px-4 py-3 text-center">
+                          <span class={`px-2 py-1 rounded-full text-xs font-bold text-white ${EMOTION_COLORS[p.emotional_register] || 'bg-slate-400'}`}>
+                            {EmotionLabel[p.emotional_register] || p.emotional_register || 'N/A'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  {analytics.top_participants.length === 0 && (
+                    <tr><td colSpan={3} class="text-center py-6 text-slate-400">Sin actividad registrada.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
     </Layout>
   );
