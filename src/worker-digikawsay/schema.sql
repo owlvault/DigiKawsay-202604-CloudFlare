@@ -140,3 +140,12 @@ CREATE TABLE IF NOT EXISTS agent_metaparams (
   system_base_prompt TEXT,
   updated_at        TEXT DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Identity & Authentication
+CREATE TABLE IF NOT EXISTS administrators (
+  admin_id      TEXT PRIMARY KEY,
+  username      TEXT UNIQUE,
+  password_hash TEXT,
+  role          TEXT DEFAULT 'admin',
+  created_at    TEXT DEFAULT CURRENT_TIMESTAMP
+);

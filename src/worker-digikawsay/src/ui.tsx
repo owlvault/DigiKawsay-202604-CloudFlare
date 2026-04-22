@@ -4,7 +4,7 @@ import type { FC } from 'hono/jsx';
 // ==========================================
 // Base Corporate Layout (H+ / DigiKawsay)
 // ==========================================
-export const Layout: FC<{ children: any }> = ({ children }) => (
+export const Layout: FC<{ children: any, showSidebar?: boolean }> = ({ children, showSidebar }) => (
   <html lang="es">
     <head>
       <meta charset="UTF-8" />
@@ -24,6 +24,7 @@ export const Layout: FC<{ children: any }> = ({ children }) => (
       `}} />
     </head>
     <body class="text-slate-800 antialiased min-h-screen flex">
+      {showSidebar !== false && (
       <aside class="w-64 bg-hplus-blue text-white flex-col p-6 shadow-xl z-10 hidden md:flex">
          <div class="text-2xl font-bold bg-val-gradient bg-clip-text text-transparent mb-12">
             H+ DigiKawsay
@@ -38,7 +39,12 @@ export const Layout: FC<{ children: any }> = ({ children }) => (
             <a href="/admin/analytics" class="block py-2 px-4 rounded hover:bg-white/10 transition">📈 Analítica del Equipo</a>
             <a href="/admin/tuning" class="block py-2 px-4 rounded hover:bg-white/10 transition border-t border-white/20 mt-4 pt-4">⚙️ Tuning LLM</a>
          </nav>
+         <div class="mt-auto pt-4 border-t border-white/20">
+            <div class="text-xs text-slate-300 mb-2 truncate">🤖 Sesión activa</div>
+            <a href="/admin/logout" class="block w-full py-2 px-4 rounded bg-red-900/50 hover:bg-red-800 transition text-sm text-center">🚪 Cerrar Sesión</a>
+         </div>
       </aside>
+      )}
       <main class="flex-1 p-8 relative overflow-y-auto">
         <div class="absolute inset-0 opacity-5 pointer-events-none" style="background-image: radial-gradient(#002D5A 2px, transparent 2px); background-size: 30px 30px;"></div>
         <div class="relative z-10 max-w-5xl mx-auto">
@@ -47,6 +53,62 @@ export const Layout: FC<{ children: any }> = ({ children }) => (
       </main>
     </body>
   </html>
+);
+
+// ==========================================
+// View 0: Auth (Login & Setup)
+// ==========================================
+
+export const LoginView: FC<{ error?: string }> = ({ error }) => (
+  <Layout showSidebar={false}>
+    <div class="min-h-[80vh] flex items-center justify-center">
+      <div class="glass-card p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-300">
+        <div class="text-center mb-8">
+           <div class="text-3xl font-bold bg-val-gradient bg-clip-text text-transparent mb-2">H+ DigiKawsay</div>
+           <p class="text-sm text-slate-500 font-mono">Terminal de Comando Central</p>
+        </div>
+        
+        {error && <div class="bg-red-100 border border-red-200 text-red-800 p-3 rounded mb-6 text-sm">{error}</div>}
+
+        <form method="POST" action="/admin/login_web">
+          <label class="block text-sm font-bold text-hplus-blue mb-1">Nombre de Usuario</label>
+          <input type="text" name="username" class="w-full p-3 mb-4 rounded bg-slate-50 border border-slate-200 focus:ring-val-orange" required autocomplete="username" />
+          
+          <label class="block text-sm font-bold text-hplus-blue mb-1">Contraseña Encriptada</label>
+          <input type="password" name="password" class="w-full p-3 mb-6 rounded bg-slate-50 border border-slate-200 focus:ring-val-orange" required autocomplete="current-password" />
+          
+          <button type="submit" class="w-full bg-hplus-blue text-white font-bold py-3 rounded-lg hover:bg-blue-900 shadow-md transition-all">
+            Descifrar e Ingresar
+          </button>
+        </form>
+      </div>
+    </div>
+  </Layout>
+);
+
+export const SetupAdminView: FC<{}> = () => (
+  <Layout showSidebar={false}>
+    <div class="min-h-[80vh] flex items-center justify-center">
+      <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md border-t-4 border-val-orange">
+        <div class="text-center mb-6">
+           <div class="text-2xl font-bold text-hplus-blue mb-2">Bootstrap de Seguridad</div>
+           <p class="text-sm text-slate-500">No se han detectado administradores. Estás nombrando al usuario raíz del enjambre.</p>
+        </div>
+
+        <form method="POST" action="/admin/setup_web">
+          <label class="block text-sm font-bold text-hplus-blue mb-1">Usuario Raíz</label>
+          <input type="text" name="username" class="w-full p-3 mb-4 rounded bg-slate-50 border border-slate-200" required />
+          
+          <label class="block text-sm font-bold text-hplus-blue mb-1">Contraseña (Mínimo 8 chars)</label>
+          <input type="password" name="password" class="w-full p-3 mb-6 rounded bg-slate-50 border border-slate-200" required minlength="8" />
+          
+          <button type="submit" class="w-full bg-val-gradient text-white font-bold py-3 rounded-lg shadow-md transition-all">
+            Crear Identidad Genesis
+          </button>
+        </form>
+      </div>
+    </div>
+  </Layout>
 );
 
 // ==========================================

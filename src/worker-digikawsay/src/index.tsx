@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
+import { getSignedCookie, setSignedCookie, deleteCookie } from 'hono/cookie';
 import { runAgentCycle } from './agent';
-import { LobbyView, DashboardView, WozView, AnalyticsView, TuningView } from './ui';
+import { hashPassword, verifyPassword } from './auth';
+import { LoginView, SetupAdminView, LobbyView, DashboardView, WozView, AnalyticsView, TuningView } from './ui';
 
 type Bindings = {
   DB: D1Database;
@@ -12,7 +14,90 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Admin Identity Middleware ──────────────────────────────────────────────
+
+app.use('/admin/*', async (c, next) => {
+  const path = c.req.path;
+  if (path === '/admin/login' || path === '/admin/login_web' || path === '/admin/setup' || path === '/admin/setup_web') {
+    return next();
+  }
+
+  const { c: cCount } = await c.env.DB.prepare(`SELECT count(*) as c FROM administrators`).first<{c: number}>() || {c: 0};
+  if (cCount === 0) {
+    return c.redirect('/admin/setup');
+  }
+
+  const secret = c.env.GEMINI_API_KEY || 'digi_secret';
+  const identity = await getSignedCookie(c, secret, 'dk_session');
+  if (!identity) {
+    return c.redirect('/admin/login');
+  }
+
+  c.set('adminUser', identity);
+  await next();
+});
+
+// ── Auth Endpoints ─────────────────────────────────────────────────────────
+
+app.get('/admin/setup', async (c) => {
+  const { c: cCount } = await c.env.DB.prepare(`SELECT count(*) as c FROM administrators`).first<{c: number}>() || {c: 0};
+  if (cCount > 0) return c.redirect('/admin/login');
+  return c.html(<SetupAdminView />);
+});
+
+app.post('/admin/setup_web', async (c) => {
+  const body = await c.req.parseBody();
+  const username = String(body.username);
+  const password = String(body.password);
+  
+  if (password.length < 8) return c.text('La contraseña debe tener al menos 8 caracteres', 400);
+
+  const hash = await hashPassword(password);
+  await c.env.DB.prepare(
+    `INSERT INTO administrators (admin_id, username, password_hash) VALUES (hex(randomblob(16)), ?, ?)`
+  ).bind(username, hash).run();
+
+  return c.redirect('/admin/login');
+});
+
+app.get('/admin/login', async (c) => {
+  const error = c.req.query('error');
+  return c.html(<LoginView error={error === '1' ? 'Credenciales incorrectas o usuario no encontrado.' : undefined} />);
+});
+
+app.post('/admin/login_web', async (c) => {
+  const body = await c.req.parseBody();
+  const username = String(body.username);
+  const pass = String(body.password);
+
+  const admin = await c.env.DB.prepare(`SELECT password_hash FROM administrators WHERE username = ?`).bind(username).first<{password_hash: string}>();
+  if (!admin) {
+    return c.redirect('/admin/login?error=1');
+  }
+
+  const isValid = await verifyPassword(pass, admin.password_hash);
+  if (!isValid) {
+    return c.redirect('/admin/login?error=1');
+  }
+
+  const secret = c.env.GEMINI_API_KEY || 'digi_secret';
+  await setSignedCookie(c, 'dk_session', username, secret, {
+    path: '/',
+    httpOnly: true,
+    secure: true,
+    sameSite: 'Strict',
+    maxAge: 60 * 60 * 24 * 7 // 7 days
+  });
+
+  return c.redirect('/admin/lobby');
+});
+
+app.get('/admin/logout', async (c) => {
+  deleteCookie(c, 'dk_session', { path: '/' });
+  return c.redirect('/admin/login');
+});
+
+// ── Webhooks & API Publicas ────────────────────────────────────────────────────────────────
 
 async function sendTelegram(token: string, chatId: number | string, text: string): Promise<void> {
   await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
