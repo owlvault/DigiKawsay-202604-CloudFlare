@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { runAgentCycle } from './agent';
-import { LobbyView, DashboardView, WozView, AnalyticsView } from './ui';
+import { LobbyView, DashboardView, WozView, AnalyticsView, TuningView } from './ui';
 
 type Bindings = {
   DB: D1Database;
@@ -140,6 +140,7 @@ async function handleMessage(text: string, chatId: number, env: Bindings): Promi
     const analyticsJson = JSON.stringify({
       saberes_detectados: result.saberes_detectados,
       oppressive_structures: result.oppressive_structures,
+      metadata: result.metadata,
     });
 
     await db.prepare(
@@ -363,6 +364,68 @@ app.get('/admin/directives/:project_id', async (c) => {
      FROM wizard_directives WHERE project_id = ? ORDER BY created_at DESC`
   ).bind(projectId).all();
   return c.json({ directives: results });
+});
+
+// ── Admin: Real-Time Polling ───────────────────────────────────────────────
+
+app.get('/admin/api/live_feed/:project_id', async (c) => {
+  const projectId = c.req.param('project_id');
+  const afterTime = c.req.query('after') || '1970-01-01 00:00:00';
+  
+  const { results: turns } = await c.env.DB.prepare(
+    `SELECT t.turn_id, t.participant_id, p.display_name, t.user_text, t.val_response, 
+            t.emotional_register, t.speech_act, t.topics, t.timestamp
+     FROM dialogue_turns t
+     JOIN participants p ON t.participant_id = p.participant_id
+     WHERE t.project_id = ? AND t.timestamp > ?
+     ORDER BY t.timestamp ASC LIMIT 50`
+  ).bind(projectId, afterTime).all();
+
+  const { results: participants } = await c.env.DB.prepare(
+    `SELECT participant_id, display_name, status, last_message_at
+     FROM participants WHERE project_id = ?`
+  ).bind(projectId).all();
+
+  const dbTime = await c.env.DB.prepare(`SELECT CURRENT_TIMESTAMP as now`).first<{now: string}>();
+
+  return c.json({ turns, participants, server_time: dbTime?.now });
+});
+
+// ── Admin: Agent Tuning ────────────────────────────────────────────────────
+
+app.get('/admin/tuning', async (c) => {
+  const { results: projects } = await c.env.DB.prepare(
+    `SELECT project_id, name FROM projects ORDER BY created_at DESC`
+  ).all();
+
+  const projectId = c.req.query('project_id') || (projects.length > 0 ? (projects[0] as any).project_id : null);
+  let metaparams = null;
+  if(projectId) {
+     metaparams = await c.env.DB.prepare(`SELECT * FROM agent_metaparams WHERE project_id = ?`).bind(projectId).first();
+  }
+  const activeProj = projects.find((p: any) => p.project_id === projectId) || projects[0];
+  
+  return c.html(<TuningView projects={projects} activeProject={activeProj} params={metaparams} />);
+});
+
+app.post('/admin/tuning_web', async (c) => {
+  const body = await c.req.parseBody();
+  const projectId = String(body.project_id);
+  const temp = parseFloat(String(body.active_temperature));
+  const maxTokens = parseInt(String(body.max_output_tokens), 10);
+  const prompt = String(body.system_base_prompt);
+  
+  await c.env.DB.prepare(
+    `INSERT INTO agent_metaparams (project_id, active_temperature, max_output_tokens, system_base_prompt, updated_at)
+     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(project_id) DO UPDATE SET
+       active_temperature = excluded.active_temperature,
+       max_output_tokens = excluded.max_output_tokens,
+       system_base_prompt = excluded.system_base_prompt,
+       updated_at = CURRENT_TIMESTAMP`
+  ).bind(projectId, temp, maxTokens, prompt).run();
+  
+  return c.redirect(`/admin/tuning?project_id=${projectId}&saved=1`);
 });
 
 // ── Analytics ──────────────────────────────────────────────────────────────

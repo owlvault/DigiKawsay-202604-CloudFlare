@@ -44,8 +44,10 @@ PROHIBICIONES ABSOLUTAS:
 - Nunca hagas más de una pregunta por turno.
 - Puedes confirmar que eres IA si te lo preguntan directamente, pero nunca reveles el sistema detrás.
 
-CONTEXTO DEL PROYECTO:
-{SEED_PROMPT}`;
+OBJETIVO DE LA INVESTIGACIÓN (PREGUNTA SEMILLA):
+{SEED_PROMPT}
+
+Alinea tus preguntas y respuestas para explorar este objetivo. Si el participante se desvía, guíalo sutilmente de vuelta a este tema central.`;
 
 const DIRECTIVE_SECTION = `
 
@@ -59,6 +61,7 @@ export interface AgentResult {
   directive_applied: string | null;
   saberes_detectados: string[];
   oppressive_structures: string[];
+  metadata?: any;
 }
 
 interface ClassificationResult {
@@ -161,9 +164,18 @@ export async function runAgentCycle(params: AgentParams): Promise<AgentResult> {
      ORDER BY created_at DESC LIMIT 1`
   ).bind(participantId).first<{ id: string; content: string }>();
 
+  // 2.5 Cargar metaparametros de tuning
+  const metaResult = await db.prepare(
+    `SELECT active_temperature, max_output_tokens, system_base_prompt FROM agent_metaparams WHERE project_id = ?`
+  ).bind(projectId).first<{ active_temperature: number; max_output_tokens: number; system_base_prompt: string | null }>();
+
+  const temperature = metaResult?.active_temperature ?? 0.7;
+  const maxOutputTokens = metaResult?.max_output_tokens ?? 800;
+  const basePromptTemplate = metaResult?.system_base_prompt || VAL_BASE_PROMPT;
+
   // 3. Construir system prompt
   const resolvedSeed = seedPrompt?.trim() || "Explora cómo el equipo trabaja, toma decisiones y comparte conocimiento en el día a día.";
-  let systemPrompt = VAL_BASE_PROMPT.replace("{SEED_PROMPT}", resolvedSeed);
+  let systemPrompt = basePromptTemplate.replace("{SEED_PROMPT}", resolvedSeed);
   if (directive) {
     systemPrompt += DIRECTIVE_SECTION.replace("{DIRECTIVE}", directive.content);
   }
@@ -182,18 +194,23 @@ export async function runAgentCycle(params: AgentParams): Promise<AgentResult> {
   const valLlm = new ChatGoogleGenerativeAI({
     model: "gemini-2.5-flash",
     apiKey: geminiKey,
-    temperature: 0.7,
-    maxOutputTokens: 300,
+    temperature,
+    maxOutputTokens,
   });
 
   let response: string;
   let classification: ClassificationResult;
+  let tokenUsage: any = null;
 
+  const t0 = Date.now();
   try {
-    [{ content: response }, classification] = await Promise.all([
-      valLlm.invoke(messages).then(r => ({ content: r.content as string })),
+    const [valResult, classResult] = await Promise.all([
+      valLlm.invoke(messages),
       classifyFragment(input, geminiKey),
     ]);
+    response = valResult.content as string;
+    tokenUsage = valResult.response_metadata?.tokenUsage;
+    classification = classResult;
   } catch (error: any) {
     const msg = error?.message || "";
     if (msg.includes("429") || msg.toLowerCase().includes("quota")) {
@@ -209,6 +226,8 @@ export async function runAgentCycle(params: AgentParams): Promise<AgentResult> {
     throw error;
   }
 
+  const latencyBase = Date.now() - t0;
+
   return {
     response,
     emotional_register: classification.emotional_register,
@@ -216,5 +235,12 @@ export async function runAgentCycle(params: AgentParams): Promise<AgentResult> {
     directive_applied: directive?.id ?? null,
     saberes_detectados: classification.saberes_detectados,
     oppressive_structures: classification.oppressive_structures,
+    metadata: {
+       latency_ms: latencyBase,
+       token_usage: tokenUsage,
+       temperature,
+       max_tokens: maxOutputTokens,
+       is_custom_prompt: !!metaResult?.system_base_prompt
+    }
   };
 }
