@@ -1,40 +1,103 @@
-# DigiKawsay: Manual Conceptual y Entregables (v4.0)
+# DigiKawsay: Manual Conceptual y Entregables (v4.1)
 
 ## 1. ¿Qué es DigiKawsay?
 
-DigiKawsay es una plataforma de **inteligencia artificial sentipensante** diseñada para realizar diagnósticos, descubrimientos y exploración estructurada dentro de la cultura organizacional. A diferencia de las encuestas tradicionales con parámetros de opción múltiple limitados, DigiKawsay utiliza un **ecosistema de agentes de IA (Swarm)** para mantener conversaciones profundas, relacionales, asíncronas y uno-a-uno con los miembros de una compañía valiéndose de canales de uso familiar (ej. Telegram).
+DigiKawsay es una plataforma de **inteligencia artificial sentipensante** para diagnósticos de cultura organizacional. A diferencia de las encuestas tradicionales, utiliza conversaciones asíncronas uno-a-uno vía Telegram con **VAL** —un agente de IA— para extraer el conocimiento tácito real que los empleados rara vez expresan en formularios: los workarounds cotidianos, las jerarquías informales, el conocimiento no documentado y los bloqueos sistémicos invisibles.
 
-El objetivo nuclear es trascender las respuestas "correctas" de manual corporativo para extraer el conocimiento tácito, visibilizar la cultura real u oculta ("Shadow IT", "Tribal Knowledge") y apalancar el clima emocional subyacente mediante consolidaciones cruzadas de perspectivas en la red.
+El objetivo no es medir satisfacción con escala de 1 a 5. Es producir un mapa vivo de cómo funciona realmente la organización desde adentro.
 
-## 2. Paradigma Sentipensante (Investigación Acción Participativa)
+---
 
-El núcleo algorítmico y comunicacional de DigiKawsay se fundamenta en la vertiente metodológica de Orlando Fals Borda y la IAP. El ente conversacional frontal principal, llamado **VAL**, está diseñado explícitamente para **sentir y pensar** a la par con el participante:
-- **Validación emocional primaria:** Previo a cualquier cuestionamiento o sondeo invasivo, VAL reconoce la carga afectiva ("Veo que esta situación genera estrés").
-- **Paridad relacional horizontal:** VAL asume la postura de un acompañante crítico reflexivo. Jamás adopta el comportamiento de un inspector o auditor condescendiente.
-- **Espacio y Puertos Seguros (Safe Harbor):** Refuerza explícitamente el anonimato. La arquitectura busca acoger las vulnerabilidades como inputs valiosos, protegiendo las identidades mediante filtros PII previos al análisis.
+## 2. Paradigma Sentipensante (IAP de Orlando Fals Borda)
 
-## 3. Arquitectura Cognitiva Multi-Agente
+El núcleo conceptual y comunicacional de DigiKawsay se funda en la metodología de **Orlando Fals Borda** y la **Investigación Acción Participativa (IAP)**. El principio central: el conocimiento legítimo emerge cuando se integran el *sentir* y el *pensar* de forma simultánea, no secuencial.
 
-DigiKawsay v4 no es simplemente un ChatGPT conectado a un webhook. Su tejido es una delegación de responsabilidades mediante orquestación en *LangGraph* e hilos *Pub/Sub*:
+VAL está diseñado para encarnar este principio en cada turno de conversación:
 
-1. **El Observador Inmediato (VAL):** Agente principal. Acompaña, dialoga, inyecta empatía y formula de manera estructurada interrogantes sutiles a partir de directrices macro.
-2. **El Procesador Blindado (Preprocesador):** Entidad algorítmica no-conversacional encargada de despojar PII (nombres, cédulas corporativas) del input antes de inyectarlo al cerebro analítico u originar un embedding vectorial.
-3. **El Analista Crítico (AG-05 / Metodólogo):** Un agente supervisor periférico asíncrono. Escanea clústeres de conversaciones en progreso para develar asimetrías de poder (estructuras opresivas), colectivismo orgánico o "bypass de procesos". No habla con el usuario; redacta hipótesis para el comité humano investigador.
-4. **El Enlace Directivo (AG-00 / Supervisor):** Consolida la información métrica para el panel central Administrativo (Endpoint 8002). Emite el puente vital entre la plataforma y el rol "Wizard of Oz".
+- **Validación emocional primaria:** Antes de cualquier pregunta, VAL reconoce la carga afectiva del participante. No para manipular, sino porque el conocimiento solo fluye cuando hay confianza.
+- **Paridad relacional horizontal:** VAL habla como par, no como auditor. Puede decir "eso me parece complejo". Nunca usa jerga de investigación ("categoría", "constructo", "metodología").
+- **Brevedad y presencia:** Máximo 3 oraciones por respuesta. Una sola pregunta por turno. El silencio es válido.
+- **Safe Harbor:** Si VAL detecta angustia emocional severa, suspende la investigación y acompaña con empatía. No retoma temas analíticos hasta que la persona se estabilice.
+- **Curiosidad genuina:** Sigue los hilos que emergen en la conversación, no una checklist de temas predefinidos.
 
-### "El Espejo": Fricción Tecnológica Consciente
-Ocurre frecuentemente el efecto de "eco solitario" en la organización. DigiKawsay incorpora una base de datos vectorial de proximidad (Weaviate) que entrelaza la semántica de distintos individuos. Periódicamente en el flujo de interacción, el sistema activa "El Espejo", compartiendo inputs anónimos de otras mentes organizativas:
-- **Resonancia:** *"Hay eco de tu perspectiva en el equipo, otra persona comparte la misma preocupación frente a..."*
-- **Divergencias o Tensiones:** *"Por otro lado, se asoma desde otro ángulo una perspectiva de alguien más, sugiriendo que..."*
-Se siembra deliberadamente disonancia o identidad comunitaria preservando la criptografía humana.
+VAL nunca revela que existe un sistema detrás suyo. Puede confirmar que es IA si se le pregunta directamente, pero no describe la arquitectura.
 
-## 4. El "Flywheel" de Entrenamiento y Productos Finales
+---
 
-DigiKawsay en su arquitectura microservicio v4 introduce la filosofía del Flywheel de retroalimentación; un motor rotativo que optimiza los parámetros de IA entre más se itere el ciclo *(Investigación -> Acción -> Participación -> Cierre)*.
+## 3. Cómo funciona VAL: el ciclo de un turno
 
-Un piloto exitoso **NO** entrega una gráfica pastel de "Satisfacción". Entrega insumos topológicos gerenciales accionables:
+Cada vez que un participante envía un mensaje, el sistema ejecuta en paralelo:
 
-1. **Dashboard Obsidian de Resonancia Activa:** Reportes vivos (SPA) permitiendo al analista humano ver métricas de abandono o cadencias de las interacciones.
-2. **Mapa Topológico del Ecosistema:** Análisis subyacente hecho por AG-05 develando burocracias colapsadas, nodos únicos de poder aislados o conocimiento nativo emergente de la base laboral.
-3. **Métricas de 'Directives Effectiveness':** Capacidad analítica para que la compañía misma mida si el bot interpretó de manera ágil o deficiente sus instrucciones (Evaluaciones *Wizard of Oz*).
-4. **Síntesis del Corpus:** Extractos validados limpios. Actos de habla destilados con etiquetas Falsbordianas puras (Praxis, Saberes, Relaciones Organizacionales), listas para ser el cimiento orgánico para reformas sistémicas de HR.
+1. **Respuesta conversacional VAL:** Gemini 2.5-flash recibe el historial de los últimos 12 turnos + el seed prompt del proyecto + una directiva WoZ (si el facilitador inyectó una). Responde en carácter sentipensante.
+
+2. **Clasificación semántica:** Un segundo llamado paralelo a Gemini (temperatura 0.1) clasifica el fragmento del participante en cuatro dimensiones:
+   - **Registro emocional:** OPEN · GUARDED · RESISTANT · DISTRESSED · NEUTRAL
+   - **Indicador de praxis:** PROPUESTA_ACCION · CATARSIS · REFLEXION_PASIVA
+   - **Saberes tácitos detectados:** herramientas no oficiales (Excel propio, WhatsApp grupos, papel y lápiz), workarounds, conocimiento no documentado
+   - **Estructuras opresivas:** jerarquía bloqueante, burocracia excesiva, silos, falta de recursos, procesos rotos
+
+3. **Persistencia:** El turno completo (respuesta + clasificación) se guarda en D1 para análisis posterior.
+
+Este proceso ocurre sin que el participante lo perciba. La clasificación es interna.
+
+---
+
+## 4. Sistema de Directivas (Wizard of Oz)
+
+El facilitador humano puede inyectar **directivas** desde el panel admin. Son instrucciones secretas que VAL integra orgánicamente en su siguiente respuesta, sin mencionarlas ni revelar que existen.
+
+Ejemplo: si el facilitador nota que un participante mencionó usar WhatsApp para coordinarse y quiere profundizar, inyecta: *"Indaga respetuosamente qué tan frecuente es el uso de canales informales y qué los lleva a preferirlos sobre los sistemas oficiales."*
+
+VAL lo convierte en una pregunta natural dentro de la conversación, como si surgiera de su propia curiosidad.
+
+Las directivas tienen nivel de urgencia (MEDIO / ALTO) y ciclo de vida: PENDING → APPLIED. Una vez aplicada, se cierra.
+
+---
+
+## 5. Analítica del equipo: lo que el sistema entrega
+
+Al finalizar un piloto (o en cualquier momento durante él), el facilitador accede a una analítica agregada del proyecto:
+
+### Distribución emocional del equipo
+Porcentaje de turnos clasificados como OPEN, GUARDED, RESISTANT o DISTRESSED. Permite identificar si el equipo está en postura receptiva o defensiva frente al proceso.
+
+### Distribución de praxis Falsbordiana
+- **PROPUESTA_ACCION:** el equipo formula soluciones concretas → señal de agencia colectiva
+- **CATARSIS:** predominan quejas sin propuesta → posible agotamiento o bloqueo percibido
+- **REFLEXION_PASIVA:** narración descriptiva sin dirección → fase de exploración
+
+### Shadow IT y saberes tácitos
+Lista de herramientas no oficiales detectadas (Excel propio, WhatsApp, papel y lápiz, Google Sheets personal, etc.) con frecuencia de mención. Esto visibiliza el conocimiento tácito que el organigrama no captura.
+
+### Estructuras opresivas
+Patrones de bloqueo detectados: jerarquías que frenan, burocracia excesiva, silos entre áreas, falta de recursos. Base empírica para recomendaciones sistémicas.
+
+### Profundidad por participante
+Número de turnos por persona y su registro emocional actual. Permite identificar participantes con alta densidad informacional vs. quienes necesitan más acompañamiento.
+
+---
+
+## 6. Entregables de un piloto
+
+Un piloto exitoso de DigiKawsay produce:
+
+1. **Panel de analítica en tiempo real** — disponible durante y después del piloto en `/admin/analytics`
+2. **Historial de conversaciones anonimizado** — exportable desde `/admin/conversation/:id` por participante
+3. **Registro de directivas WoZ aplicadas** — efectividad de cada intervención del facilitador
+4. **Corpus clasificado** — cada turno etiquetado con emoción, praxis, saberes y estructuras
+
+---
+
+## 7. Funcionalidades en hoja de ruta (no en MVP actual)
+
+| Funcionalidad | Descripción |
+|---|---|
+| **El Espejo** | Resonancia semántica anónima entre participantes (embeddings vectoriales) |
+| **PII-Stripper** | Filtro automático de datos personales antes del LLM |
+| **AG-05 (Metodólogo)** | Análisis topológico (TDA) y de redes organizacionales (SNA/ONA) |
+| **Plan de Movilización** | Síntesis final: OKRs + redes de compromiso en JSON accionable |
+| **Arquitectura distribuida** | Pub/Sub + Weaviate + PostgreSQL para escala corporativa |
+| **Dashboard Obsidian** | Métricas de latencia cognitiva y abandono en tiempo real |
+| **DIALOGUE_SATURATION** | Señal automática cuando 3 turnos consecutivos sin información nueva |
+
+Estas capacidades están especificadas en los documentos de la carpeta `Requerimientos/` y constituyen la arquitectura objetivo de versiones futuras.

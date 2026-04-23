@@ -1,18 +1,65 @@
-# Manuales DigiKawsay: Índice General (Arquitectura Híbrida v4.0)
+# Manuales DigiKawsay — Índice General (v4.1)
 
-Bienvenido a la documentación oficial de la plataforma **DigiKawsay v4.0**, la herramienta de inteligencia artificial sentipensante para diagnósticos de cultura organizacional. 
+**DigiKawsay** es una plataforma de inteligencia artificial sentipensante para diagnósticos de cultura organizacional. Los participantes conversan con **VAL** —agente facilitador fundado en la Investigación Acción Participativa (IAP) de Orlando Fals Borda— a través de Telegram, mientras el sistema captura, clasifica y analiza el conocimiento tácito organizacional en tiempo real.
 
-El sistema ha madurado hacia una **Arquitectura Híbrida de Microservicios**. Mantenemos la agilidad local del Borde (Cloudflare) como solución minimalista (MVP) para casos específicos, pero el motor principal y corporativo opera mediante un enjambre de agentes en **Python**, mensajería **Pub/Sub** y orquestación con **Docker Compose**. Esto otorga persistencia robusta relacional (PostgreSQL), búsqueda semántica distribuida (Weaviate) y cadenas cognitivas complejas (LangGraph).
+---
 
-A continuación, encontrarás los enlaces a todos los manuales necesarios para administrar y desplegar exitosamente un piloto diagnóstico a nivel corporativo:
+## Sistema en producción (v4.1 — Cloudflare Worker)
 
-*   **[01. Manual Conceptual y Entregables](01_Manual_Conceptual_V4.0.md)**
-    *   Comprende qué es DigiKawsay funcional y filosóficamente. Entiende el paradigma Falsbordiano "sentipensante", la composición del enjambre multi-agente, la mecánica vectorial de *El Espejo* y descubre exactamente qué productos (datos, reportes y métricas Flywheel) entrega el sistema al finalizar.
-*   **[02. Manual de Ejecución de Piloto](02_Manual_Ejecucion_Piloto_V4.0.md)**
-    *   Guía paso a paso para planear, instrumentar y levantar un clúster local/nube. Abarca configuración de variables `.env`, orquestación con Docker Compose, establecimiento del webhook en Telegram y la creación de un nuevo proyecto desde el panel central.
-*   **[03. Manual del Facilitador (Panel WoZ y Obsidian)](03_Manual_Facilitador_V4.0.md)**
-    *   Documento crucial para los investigadores cualitativos. Te enseña a inyectar directivas humanas como *Wizard of Oz*, evaluar las métricas de eficacia de tú intervención y cómo observar telemetría en tiempo real mediante el Dashboard gerencial.
-*   **[04. Manual Técnico y de Arquitectura](04_Manual_Tecnico_V4.0.md)**
-    *   Para ingenieros de infraestructura y desarrolladores backend. Mapeo profundo de la topología Pub/Sub, esquemas de PostgreSQL, flujos en Python (AG-05, Agente00, Preprocessor) y la compatibilidad opcional transicional con Cloudflare Hono.js.
-*   **[05. Guía de Experiencia y Usuario Final](05_Manual_Usuario_V4.0.md)**
-    *   Para ilustrar el proceso orgánico hacia los empleados/voluntarios participantes (Gatekeeping de links, anonimización rigurosa PII-Stripper, ritmos de diálogo asíncrono y salidas éticas del sistema).
+El sistema corre completamente sobre **Cloudflare Workers** (serverless, sin Docker, sin microservicios locales). No requiere infraestructura propia.
+
+| Componente | Tecnología | Propósito |
+|---|---|---|
+| Runtime | Cloudflare Workers + Hono.js (TypeScript) | Lógica central, router HTTP, SSR |
+| Base de datos | Cloudflare D1 (SQLite) | Proyectos, participantes, diálogos, directivas WoZ |
+| LLM | Google Gemini 2.5-flash | VAL conversacional + clasificación semántica paralela |
+| Canal | Telegram Bot API (webhook) | Conversaciones con participantes |
+| Panel admin | Hono JSX (SSR) | Facilitador: WoZ, analítica, tuning, participantes |
+| Autenticación | Signed cookies (SHA-256 + D1) | Protección del panel de administración |
+
+**URL del worker:** `https://worker-digikawsay.camilo-carvajalino.workers.dev`
+
+---
+
+## Manuales disponibles
+
+| # | Manual | Audiencia principal |
+|---|--------|---------------------|
+| [01](01_Manual_Conceptual_V4.0.md) | Manual Conceptual y Entregables | Todos los roles |
+| [02](02_Manual_Ejecucion_Piloto_V4.0.md) | Manual de Ejecución de Piloto | Facilitador técnico |
+| [03](03_Manual_Facilitador_V4.0.md) | Manual del Facilitador (Panel Admin y WoZ) | Investigador cualitativo |
+| [04](04_Manual_Tecnico_V4.0.md) | Manual Técnico y de Arquitectura | Desarrollador / DevOps |
+| [05](05_Manual_Usuario_V4.0.md) | Guía de Experiencia del Usuario | Participante |
+| [06](06_Manual_Autenticacion_V4.1.md) | Manual de Autenticación de Administradores | Administrador |
+| [07](07_Manual_Tuning_VAL_V4.1.md) | Manual de Tuning de VAL | Facilitador técnico |
+
+---
+
+## Notas de versión
+
+**v4.1 — Abr 2026 (en producción):** Arquitectura Cloudflare Worker serverless. Incluye: VAL con memoria conversacional en D1, prompt IAP completo, directivas WoZ, clasificación emántica paralela vía Gemini, panel de analítica en tiempo real, tuning de parámetros por proyecto y autenticación de administradores con cookies firmadas.
+
+**v4.0 — Abr 2026 (depreciada):** Los manuales v4.0 originales describían una arquitectura Python/Docker/Pub/Sub/Weaviate/PostgreSQL que no llegó a despliegue en producción. Esa visión arquitectónica permanece como hoja de ruta futura documentada en `Requerimientos/`.
+
+**v3.0 — 2025 (depreciada):** MVP inicial. Archivada en la carpeta `V3.0/` de este directorio.
+
+---
+
+## Alcance del piloto actual (MVP v4.1)
+
+### Funcionalidades implementadas ✅
+- Conversación uno-a-uno con VAL vía Telegram (con memoria de los últimos 12 turnos)
+- Clasificación semántica automática: registro emocional, indicador de praxis, Shadow IT y estructuras opresivas
+- Gestión de proyectos, ciclos y participantes
+- Invitaciones herméticas por token único
+- Panel Wizard of Oz (WoZ): monitoreo en tiempo real + inyección de directivas
+- Panel de analítica: KPIs, distribuciones emocionales, saberes detectados, estructuras opresivas
+- Tuning de VAL por proyecto (temperatura, tokens, prompt base)
+- Autenticación admin con sesiones seguras
+
+### En hoja de ruta 🗓️
+- El Espejo (resonancia semántica entre participantes vía embeddings)
+- PII-Stripper automático (filtro de datos personales antes del LLM)
+- AG-05 (análisis topológico y de redes organizacionales)
+- Arquitectura distribuida con Pub/Sub y Weaviate
+- Exportación de corpus analítico y Plan de Movilización JSON

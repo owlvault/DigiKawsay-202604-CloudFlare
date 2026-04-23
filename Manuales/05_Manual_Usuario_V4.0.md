@@ -1,43 +1,107 @@
-# DigiKawsay: Guía de Experiencia y Usuario Final (v4.0)
+# DigiKawsay: Guía de Experiencia del Usuario (v4.1)
 
-*Esta guía ilustra de forma transparente los principios operativos que definen el ecosistema DigiKawsay y detalla explícitamente a los participantes (empleados, voluntarios) las fases seguras de uso conversacional con el sistema algorítmico.*
+*Esta guía explica a los participantes —empleados o voluntarios— cómo funciona DigiKawsay, qué pueden esperar de las conversaciones con VAL y cómo está protegida su privacidad.*
 
-## 1. El Ingreso al Foro Analítico (Gatekeeping y Filtro de Acceso)
+---
 
-DigiKawsay no figura lúdicamente ni constituye un "Robot general de soporte abierto" dispuesto masivamente para el acceso público en redes sociales. Su ecosistema de diagnóstico opera rígidamente bajo principios de cerco de proyectos herméticos.
+## 1. Cómo ingresar al proceso
 
-**Invitación Transaccional y Enlaces Base:**
-Recibirás una URL oficial a través de un formato o canal interno dispuesto empresarialmente:
-*Ejemplo formativo: `https://t.me/DigiKawsayBot?start=B2x9K`*. 
-Al interactuar percutiendo internamente con `/start`, la plataforma engranará, identificando a la vez tu inserción hacia una iniciativa diagnosticadora particular del entorno (ej. "Tensiones interdepartamentales en logística cruzada"), sin jamás desentramar o cruzar tu alias relacional expuesta globalmente.
+DigiKawsay no es un chatbot público. Solo participan las personas que reciben una invitación directa del facilitador de su organización.
 
-## 2. Privacidad Hermética y Consentimiento Blindado
+Recibirás un link personalizado por el canal interno que tu organización elija (email, Slack, Teams, etc.). El formato del link es:
 
-Tu resguardo y confinamiento sociológico de identidades subyacen en la base piramidal arquitectónica:
-1. **Petición del Consentimiento Vital:** Como política infalible y de base programática (Hard-Coded en servidor local `Preprocesador`), DigiKawsay imposibilitará transacciones conversacionales a largo espectro absteniéndose de capturar nada sin obtener primero tu manifestación activa y evidente respondiendo afirmativamente: "Acepto" o equivalente. 
-2. **Confidencialidad Mapeada y Anónima:** Tu panel central metodológico recibe esquemas y perfiles analíticos netamente englobados organizativamente. Es virtualmente irretocablemente críptico o engorroso para el analista corporativo rastrear de ida hacia el participante las voces específicas sin saltar las brechas de diseño impuestas de censura.
-3. **El Mecanismo Previo PII-Stripper:** En el instante preciso de ingesta desde tu red celular hacia nuestro Bus de Mensajería, cualquier traza expuesta (Ej: "Habla María de contabilidad y mi cedula es..." "el correo de jorge es...") será interceptada a quemarropa y ofuscada reemplazándose crípticamente así: `[EMAIL]`, `[PERSONA]`, protegiéndote aún ante potenciales intenciones ajenas por vulnerar capas superficiales.
+```
+https://t.me/VAL_Digi_bot?start=XXXXXXXX
+```
 
-## 3. Dinámica Relacional Asincrónica
+El código de 8 caracteres al final es único para ti. Al abrirlo en tu teléfono, Telegram se abre automáticamente con el bot y la sesión queda vinculada a tu invitación.
 
-DigiKawsay es intrínsecamente y fundamentalmente **Asíncrono**. Elimina las métricas frenéticas exigidas en Help Desks telefónicos.
+> **No compartas este link.** Si otra persona lo usa primero, tu acceso queda bloqueado. Si perdiste el link, contacta a tu facilitador para que te genere uno nuevo.
 
-- Habla libre y expresivamente con el ente algorítmico **VAL**. Formula un bloque robusto de pensamiento, viaja una estación de tránsito de metro, retoma horas subsecuentes, formula notas nuevas y envíalas con distorsiones temporales profundas. La IA respeta este reloj biológico cognitivo y entrelazará ideas holísticamente de cualquier forma.
-- **Detonante Base (Semilla Causal):** Notoriamente al inicio la máquina abrirá cuestionante a un tópico general organizativo en tus "Propias Palabras". 
+---
 
-## 4. El "Espejo" - Fricción Metacognitiva Computacional
+## 2. Primer contacto: bienvenida y consentimiento
 
-Si navegas extendidamente de la mano de **VAL**, es altísimamente probable converger asíncronamente frente al fenómeno de 'El Espejo', uno de los desarrollos algorítmicos vectores de DigiKawsay.
+Al ingresar por primera vez, VAL te envía un mensaje de bienvenida y te explica que:
 
-Aleatoria pero incisivamente, a causa matemática de similitud por cosenos (Vectores), notarás que la IA detendrá cautamente el paso y exhibirá ideas provenientes de las reflexiones ocultas de los otros trabajadores anónimos integrantes del ecosistema organizacional (Tu empresa):
+- La conversación es **voluntaria** — puedes detenerte cuando quieras
+- Tu identidad será **anonimizada** en todos los reportes
+- El proceso sigue principios de **confidencialidad** — el facilitador no puede vincular tus respuestas a tu nombre en el informe final
 
-*Impacto Reflexivo: "Sabiendo tus sentires respecto al modelo salarial... Permíteme comentarte: Existen ideas vibrando muy similares ahora mismo en otra parte de la compañía donde algún colega dice... En contraste agudo, otra persona aporta un factor que ve opuesto..."*
+Al enviar tu **primer mensaje** después de la bienvenida, das consentimiento implícito para participar. No hay que escribir "Acepto" — tu primera respuesta basta.
 
-Es vital asimilarlo no analizando con temores persecutorios. Entiende que **nadie** lee tu nombre. Estas fricciones han sido insertadas a tu terminal con tu dispositivo criptográfico local sin ataduras. Reflexiona entonces al Espejo con franqueza junto a VAL. Analizar la sombra y la resonancia comunitaria fomenta las revelaciones metodológicas para sanar procesos institucionales truncados y opresivos.
+Si en algún momento decides no continuar, simplemente deja de responder. El sistema no te enviará mensajes recurrentes.
 
-## 5. Escotilla Ética Rápida de Apagón / Opt-out
+---
 
-¿Abarcaste demasiado y ya no resulta útil o emocionalmente estable mantener interacción en esta prueba analítica?
-Es sencillo, digita en el buzón crudo la instrucción terminal:
-**"/salir"**
-Los microservidores ejecutarán forzosamente purga en la máquina de estados. El flujo y directiva de abordaje mutará hacia `"Withdrawn"`. El flujo asíncrono Langchain ignorará de ahí en lo adelante de manera irrecuperable tus intenciones de entrada salvo que solicites reestructuración a la jefatura gestora inicial.
+## 3. Conversar con VAL
+
+VAL es un agente de inteligencia artificial diseñado para escuchar sin juzgar. No es un formulario de preguntas y respuestas. Es una conversación.
+
+**Cómo funciona:**
+- VAL hace **una sola pregunta por turno**, o a veces simplemente valida lo que dijiste sin preguntar nada
+- Las respuestas de VAL son cortas — máximo 3 oraciones
+- No hay respuestas correctas o incorrectas. VAL sigue los hilos que tú abres, no una lista de temas predefinidos
+
+**La conversación es asíncrona:**
+Puedes responder cuando quieras. No hay presión de tiempo ni indicadores de "visto". Si contestas una semana después, VAL recordará el contexto de la conversación anterior. El sistema guarda los últimos 12 turnos de conversación.
+
+**Qué explorar:**
+El facilitador configura un *seed prompt* que enmarca el territorio de la conversación (ej. *"Cómo trabaja el equipo en el día a día"*). Dentro de ese territorio, VAL sigue lo que tú traes: una queja, una idea, un proceso que no funciona, algo que sí funciona, una herramienta que usas por fuera del sistema oficial.
+
+---
+
+## 4. Privacidad y anonimato
+
+### Qué sabe el sistema sobre ti
+El sistema asocia tu conversación con un identificador interno (tu chatId de Telegram). Tu nombre de display (el que el facilitador registró al crear tu invitación) aparece solo en el panel del facilitador.
+
+### Qué ven los facilitadores
+Los facilitadores acceden a:
+- El historial de tu conversación (completo, en el panel admin)
+- Tu registro emocional actual y número de turnos
+- Los patrones detectados en tu conversación (Shadow IT, indicadores de praxis)
+
+Los facilitadores **no** ven tu nombre de Telegram ni tu número de teléfono.
+
+### Qué aparece en los informes
+Los informes analíticos son agregados: distribuciones del equipo completo, patrones emergentes, saberes colectivos. No hay citas textuales vinculadas a nombres. El informe no te identifica individualmente.
+
+### Lo que el sistema NO hace actualmente
+- No filtra automáticamente tus datos personales antes de enviarlos al modelo de IA. Evita mencionar nombres completos, números de cédula o emails en tus mensajes.
+- No tiene un comando `/salir` implementado en esta versión. Para retirarte, comunícalo a tu facilitador, quien actualizará tu estado manualmente.
+
+---
+
+## 5. Safe Harbor: si la conversación se vuelve difícil
+
+VAL está entrenado para reconocer cuando alguien expresa angustia emocional severa (burnout, situaciones de crisis, agotamiento profundo). En esos casos, VAL suspende la exploración analítica y acompaña con empatía, sin retomar temas de investigación hasta que lo indiques tú.
+
+Si en algún momento la conversación te genera incomodidad, simplemente para de responder. No hay consecuencias. También puedes decirle a VAL directamente cómo te sientes.
+
+---
+
+## 6. Preguntas frecuentes
+
+**¿VAL es un humano o una IA?**
+Es una inteligencia artificial. Si lo preguntas directamente, VAL lo confirma.
+
+**¿Mis respuestas afectan mi evaluación laboral?**
+No. DigiKawsay es una herramienta de investigación organizacional, no de evaluación de desempeño. El sistema no tiene integración con sistemas de RRHH.
+
+**¿Puedo hablar de cualquier tema?**
+Dentro del territorio que el seed prompt define (ej. cultura organizacional, procesos de trabajo). VAL puede notar si te alejas del territorio y gentilmente retomar, pero sin forzar.
+
+**¿Qué pasa si no respondo por semanas?**
+Nada. El sistema no envía recordatorios. Tu conversación queda guardada y puedes retomar cuando quieras mientras el piloto esté activo.
+
+**¿Puedo ver lo que el sistema recopiló sobre mí?**
+Contacta a tu facilitador. El historial completo de tu conversación está disponible en el panel admin.
+
+---
+
+## 7. El Espejo (próximamente)
+
+En versiones futuras del sistema, VAL introducirá periódicamente perspectivas anónimas de otros participantes del mismo proyecto — ideas de colegas que resuenan con lo que tú dijiste, o perspectivas complementarias que contrastan.
+
+Este mecanismo, llamado *El Espejo*, busca generar conciencia colectiva sin romper el anonimato: verás ideas del grupo, nunca nombres. No está disponible en la versión actual del sistema.
