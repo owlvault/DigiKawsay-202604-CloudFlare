@@ -281,7 +281,7 @@ export const AnalyticsView: FC<{ projects: any[]; projectId: string; analytics: 
   return (
     <Layout>
       {/* Header */}
-      <div class="flex flex-wrap justify-between items-center mb-8 gap-4">
+      <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
         <div>
           <h1 class="text-4xl text-hplus-blue font-bold">Analítica del Equipo</h1>
           {analytics && <p class="text-slate-500 mt-1">{analytics.project_name}</p>}
@@ -297,6 +297,14 @@ export const AnalyticsView: FC<{ projects: any[]; projectId: string; analytics: 
           </button>
         </form>
       </div>
+
+      {analytics && (
+        <div class="flex justify-end mb-8">
+           <a href={`/admin/report/${projectId}`} target="_blank" class="px-4 py-2 bg-val-gradient text-white rounded text-sm font-bold shadow-md hover:opacity-90 transition flex items-center gap-2">
+             <span>📥 Descargar Informe Metodológico (MD)</span>
+           </a>
+        </div>
+      )}
 
       {!analytics ? (
         <div class="glass-card p-8 text-center text-slate-500 rounded-xl">
@@ -550,10 +558,11 @@ export const WozView: FC<{ projects: any[], participants: any[] }> = ({ projects
                 let meta = {};
                 try { meta = JSON.parse(t.topics || '{}').metadata || {}; } catch(e){}
                 
+                const tokens = meta.token_usage?.total_tokens || meta.token_usage?.totalTokenCount || meta.token_usage?.totalTokens || '?';
                 const metaHtml = \`<div>
                   <div class="text-green-300">[\${t.timestamp.split(' ')[1]}] ID:\${t.turn_id.substring(0,6)}</div>
                   <div class="text-yellow-400">Class: \${t.emotional_register} | \${t.speech_act}</div>
-                  <div class="text-blue-300">Lat: \${meta.latency_ms || '?'}ms | Tks: \${meta.token_usage?.totalTokenCount || '?'}</div>
+                  <div class="text-blue-300">Lat: \${meta.latency_ms || '?'}ms | Tks: \${tokens}</div>
                   <div class="text-slate-500">---------</div>
                 </div>\`;
                 matrixFeed.insertAdjacentHTML('beforeend', metaHtml);

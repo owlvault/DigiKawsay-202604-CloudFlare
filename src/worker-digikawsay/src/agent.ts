@@ -116,9 +116,10 @@ async function classifyFragment(text: string, geminiKey: string): Promise<Classi
     const result = await llm.invoke([new HumanMessage(prompt)]);
     let raw = (result.content as string).trim();
 
-    // Limpiar si Gemini envuelve en markdown
-    if (raw.startsWith("```")) {
-      raw = raw.split("\n").slice(1).join("\n").replace(/```$/, "").trim();
+    // Extraer solo la parte JSON en caso de que Gemini añada texto o markdown
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      raw = jsonMatch[0];
     }
 
     const parsed = JSON.parse(raw) as ClassificationResult;
@@ -209,7 +210,7 @@ export async function runAgentCycle(params: AgentParams): Promise<AgentResult> {
       classifyFragment(input, geminiKey),
     ]);
     response = valResult.content as string;
-    tokenUsage = valResult.response_metadata?.tokenUsage;
+    tokenUsage = valResult.usage_metadata || valResult.response_metadata?.tokenUsage || null;
     classification = classResult;
   } catch (error: any) {
     const msg = error?.message || "";
@@ -243,4 +244,51 @@ export async function runAgentCycle(params: AgentParams): Promise<AgentResult> {
        is_custom_prompt: !!metaResult?.system_base_prompt
     }
   };
+}
+
+export async function generateSynthesisReport(projectName: string, transcripts: string, geminiKey: string): Promise<string> {
+  const llm = new ChatGoogleGenerativeAI({
+    model: "gemini-2.5-flash",
+    apiKey: geminiKey,
+    temperature: 0.3,
+    maxOutputTokens: 2500,
+  });
+
+  const prompt = `Eres el Agente Metodólogo (AG-05) de DigiKawsay.
+Tu objetivo es analizar la siguiente transcripción cruda de las conversaciones de la NAVE (proyecto): ${projectName}
+y redactar un Informe de Síntesis Fenomenológica en formato Markdown.
+
+La transcripción incluye los mensajes de varios participantes con VAL (el agente facilitador).
+
+Debes estructurar el informe EXCELENTEMENTE en Markdown, siguiendo la promesa de valor de DigiKawsay:
+
+# Informe de Síntesis: ${projectName}
+
+## 1. Calidad del "Sentipensar" (Eficacia del Agente VAL)
+Analiza la profundidad de la conversación. ¿Hubo rapport? Identifica si los participantes pasaron de transaccionalidad a reflexiones profundas. Menciona a los participantes clave y cómo evolucionó su registro emocional.
+
+## 2. Detección Sistémica (El Espejo de la Organización)
+Identifica el nudo sistémico central. ¿Cuáles son los "saberes detectados" (workarounds, conocimiento tácito) y las "estructuras opresivas" (barreras sistémicas, cuellos de botella institucionales, jerarquías)? ¿Qué vectores de fuerza o motivaciones están en tensión dentro del equipo?
+
+## 3. Oportunidades de Intervención (Wizard of Oz)
+Basado en lo anterior, recomienda al investigador humano qué tipo de directivas (intervenciones en tiempo real) debería inyectar en la próxima ronda para destrabar el nudo sistémico. Qué temas debería forzar VAL a cuestionar.
+
+Aquí está la transcripción:
+---
+${transcripts}
+---
+
+Escribe el informe ahora (sin usar bloques delimitadores de código markdown triples iniciales si no es necesario, solo redacta el texto):`;
+
+  try {
+    const result = await llm.invoke([new HumanMessage(prompt)]);
+    let raw = (result.content as string).trim();
+    if (raw.startsWith('\`\`\`markdown')) {
+       raw = raw.replace(/^\`\`\`markdown\n/, '').replace(/\n\`\`\`$/, '');
+    }
+    return raw;
+  } catch (err: any) {
+    console.error("[generateSynthesisReport]", err);
+    return `# Error al generar el informe\n\nEl sistema AI devolvió un error: ${err.message}`;
+  }
 }

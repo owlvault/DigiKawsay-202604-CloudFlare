@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { getSignedCookie, setSignedCookie, deleteCookie } from 'hono/cookie';
-import { runAgentCycle } from './agent';
+import { runAgentCycle, generateSynthesisReport } from './agent';
 import { hashPassword, verifyPassword } from './auth';
 import { LoginView, SetupAdminView, LobbyView, DashboardView, WozView, AnalyticsView, TuningView } from './ui';
 
@@ -268,11 +268,11 @@ async function handleMessage(text: string, chatId: number, env: Bindings): Promi
       (result.oppressive_structures.length ? ` | opresion:[${result.oppressive_structures.join(",")}]` : "")
     );
 
-  } catch (err) {
+  } catch (err: any) {
     console.error("[handleMessage]", err);
     await sendTelegram(
       env.TELEGRAM_BOT_TOKEN, chatId,
-      "Encontre un inconveniente tecnico. Por favor escribeme en unos minutos."
+      `Encontre un inconveniente tecnico. Por favor escribeme en unos minutos.\n\n[DEV ERROR]: ${err.message}`
     );
   }
 }
@@ -618,6 +618,46 @@ app.get('/admin/analytics', async (c) => {
   const analytics = projectId ? await computeAnalytics(projectId, c.env.DB) : null;
 
   return c.html(<AnalyticsView projects={projects} projectId={projectId} analytics={analytics} />);
+});
+// MD Report Download API
+app.get('/admin/report/:project_id', async (c) => {
+  const projectId = c.req.param('project_id');
+  
+  // 1. Get project details
+  const project = await c.env.DB.prepare(
+    `SELECT project_id, name FROM projects WHERE project_id = ?`
+  ).bind(projectId).first<{ project_id: string; name: string }>();
+  
+  if (!project) return c.text("Proyecto no encontrado", 404);
+
+  // 2. Get dialogue turns
+  const { results: turns } = await c.env.DB.prepare(
+    `SELECT t.turn_number, p.display_name, t.user_text, t.val_response, t.emotional_register, t.speech_act 
+     FROM dialogue_turns t 
+     JOIN participants p ON t.participant_id = p.participant_id 
+     WHERE t.project_id = ? 
+     ORDER BY t.timestamp ASC`
+  ).bind(projectId).all<{ turn_number: number; display_name: string; user_text: string; val_response: string; emotional_register: string; speech_act: string }>();
+
+  if (turns.length === 0) return c.text("Aún no hay transcripciones para este proyecto", 400);
+
+  // 3. Format transcripts
+  let transcriptString = "";
+  for (const t of turns) {
+    transcriptString += `[${t.display_name} - Turno ${t.turn_number} - ${t.emotional_register} / ${t.speech_act}]: ${t.user_text}\n`;
+    transcriptString += `[VAL]: ${t.val_response}\n\n`;
+  }
+
+  // 4. Call LLM to generate report
+  const reportMarkdown = await generateSynthesisReport(project.name, transcriptString, c.env.GEMINI_API_KEY);
+
+  // 5. Download headers
+  const dateStr = new Date().toISOString().split('T')[0];
+  const safeName = project.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  c.header('Content-Type', 'text/markdown; charset=utf-8');
+  c.header('Content-Disposition', `attachment; filename="sintesis_digikawsay_${safeName}_${dateStr}.md"`);
+
+  return c.text(reportMarkdown);
 });
 
 export default app;
