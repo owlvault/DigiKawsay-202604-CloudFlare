@@ -131,3 +131,21 @@ CREATE INDEX IF NOT EXISTS idx_dialogue_turns_participant ON dialogue_turns(part
 CREATE INDEX IF NOT EXISTS idx_dialogue_turns_ts ON dialogue_turns(timestamp);
 CREATE INDEX IF NOT EXISTS idx_participants_project ON participants(project_id);
 CREATE INDEX IF NOT EXISTS idx_participants_invite ON participants(invite_token);
+
+-- Tuning & Metaparameters
+CREATE TABLE IF NOT EXISTS agent_metaparams (
+  project_id        TEXT PRIMARY KEY REFERENCES projects(project_id),
+  active_temperature REAL DEFAULT 0.7,
+  max_output_tokens INTEGER DEFAULT 800,
+  system_base_prompt TEXT,
+  updated_at        TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Identity & Authentication
+CREATE TABLE IF NOT EXISTS administrators (
+  admin_id      TEXT PRIMARY KEY,
+  username      TEXT UNIQUE,
+  password_hash TEXT,
+  role          TEXT DEFAULT 'admin',
+  created_at    TEXT DEFAULT CURRENT_TIMESTAMP
+);

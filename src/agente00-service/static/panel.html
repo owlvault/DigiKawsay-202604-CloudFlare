@@ -172,6 +172,7 @@
             animation: slideUp 0.3s ease;
         }
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.7; } }
 
         .hidden { display: none !important; }
         .section { display: none; }
@@ -198,6 +199,7 @@
         <div class="nav-item" onclick="showSection('participants')">👥 Participantes</div>
         <div class="nav-item" onclick="showSection('wizard')">🧙 Wizard of Oz</div>
         <div class="nav-item" onclick="showSection('export')">📤 Exportar</div>
+        <div class="nav-item" onclick="showSection('design')">📋 Diseño de Piloto</div>
         <div class="nav-item" onclick="showSection('setup')">⚙️ Setup</div>
     </nav>
 
@@ -228,6 +230,15 @@
                 <h3>Crear Nuevo Piloto</h3>
                 <div class="form-row"><label>Nombre del Piloto</label><input id="proj-name" placeholder="Ej: Diagnóstico Comunicación Q2"></div>
                 <div class="form-row"><label>Pregunta Provocadora (Seed Prompt)</label><textarea id="proj-seed" rows="3" placeholder="Ej: ¿Cómo perciben la comunicación entre su área y Operaciones frente a los nuevos objetivos?"></textarea></div>
+                <div class="form-row">
+                    <label>Tipo de Investigación</label>
+                    <select id="proj-type">
+                        <option value="CULTURA_ORGANIZACIONAL">Diagnóstico de Cultura</option>
+                        <option value="TRANSFORMACION_DIGITAL">Transformación Digital</option>
+                        <option value="INVESTIGACION_CUALITATIVA">Investigación Cualitativa</option>
+                        <option value="PILOTO_INTERNO">Piloto Interno</option>
+                    </select>
+                </div>
                 <div class="form-row" style="display:flex; gap:16px;">
                     <div style="flex:1"><label>Max. Participantes</label><input id="proj-max" type="number" value="10"></div>
                     <div style="flex:1"><label>Duración (días)</label><input id="proj-days" type="number" value="7"></div>
@@ -277,6 +288,40 @@
                     <div class="card">
                         <h3>Conversación en Vivo</h3>
                         <div class="form-row"><label>Participante</label><select id="woz-participant" onchange="loadConversation()"></select></div>
+
+                        <!-- KPIs en tiempo real -->
+                        <div style="display:flex; gap:12px; margin-bottom:14px;">
+                            <div class="kpi" style="flex:1; padding:14px;">
+                                <div class="value" id="woz-turn-count" style="font-size:1.5rem;">-</div>
+                                <div class="label">Turnos</div>
+                            </div>
+                            <div class="kpi" style="flex:1; padding:14px;">
+                                <div class="value" id="woz-emotion" style="font-size:1rem;">-</div>
+                                <div class="label">Emoción actual</div>
+                            </div>
+                            <div class="kpi" style="flex:1; padding:14px;">
+                                <div class="value" id="woz-pending-directives" style="font-size:1.5rem;">-</div>
+                                <div class="label">Directivas pendientes</div>
+                            </div>
+                        </div>
+
+                        <!-- Banner SAFE_HARBOR -->
+                        <div id="safe-harbor-alert" style="
+                            display:none;
+                            background: rgba(239,71,111,0.12);
+                            border: 1.5px solid #ef476f;
+                            border-radius: var(--radius);
+                            padding: 12px 16px;
+                            margin-bottom: 14px;
+                            color: #ef476f;
+                            font-weight: 600;
+                            font-size: 0.9rem;
+                            animation: pulse 2s infinite;
+                        ">
+                            ⚠ SAFE HARBOR ACTIVO — Este participante muestra señales de distress.
+                            Suspende la investigación. Acompaña con empatía antes de continuar.
+                        </div>
+
                         <div class="chat-container" id="chat-container">
                             <p style="color: var(--text3); text-align: center; padding: 40px;">Selecciona un participante para ver su conversación</p>
                         </div>
@@ -336,6 +381,57 @@
                 <div id="setup-result" style="margin-top: 12px;"></div>
             </div>
         </div>
+
+        <!-- DISEÑO DE PILOTO -->
+        <div id="sec-design" class="section">
+            <h2 style="margin-bottom: 24px;">Diseño de Piloto</h2>
+
+            <!-- Template selector -->
+            <div class="card">
+                <h3>1. Seleccionar Template de Investigación</h3>
+                <div class="form-row">
+                    <label>Nombre de la Organización</label>
+                    <input id="design-org-name" placeholder="Ej: Cooperativa La Esperanza" oninput="refreshSeedTemplate()">
+                </div>
+                <div class="form-row">
+                    <label>Tipo de Investigación</label>
+                    <select id="design-type" onchange="loadSeedTemplate()">
+                        <option value="">— seleccionar —</option>
+                        <option value="CULTURA_ORGANIZACIONAL">Diagnóstico de Cultura Organizacional</option>
+                        <option value="TRANSFORMACION_DIGITAL">Transformación Digital</option>
+                        <option value="INVESTIGACION_CUALITATIVA">Investigación Cualitativa Custom</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>Seed Prompt <span style="color:var(--text3); font-weight:400;">(editable — este texto guía el comportamiento de VAL)</span></label>
+                    <textarea id="design-seed-prompt" rows="9"
+                        style="width:100%; background:var(--surface2); border:1px solid var(--border);
+                               border-radius:8px; padding:12px; color:var(--text); font-family:inherit;
+                               font-size:13px; line-height:1.6; resize:vertical;"
+                        placeholder="Selecciona un tipo de investigación para cargar el template..."></textarea>
+                </div>
+                <div class="form-row">
+                    <label>Nombre del Piloto</label>
+                    <input id="design-pilot-name" placeholder="Ej: Diagnóstico Cultura Q2-2026">
+                </div>
+                <div style="display:flex; gap:12px;">
+                    <button class="btn btn-primary" onclick="createPilotFromDesign()">✅ Crear Piloto con este Seed Prompt</button>
+                    <button class="btn btn-secondary" onclick="copySeedToClipboard()">📋 Copiar Seed Prompt</button>
+                </div>
+            </div>
+
+            <!-- Biblioteca de directivas -->
+            <div class="card" style="margin-top:16px;">
+                <h3>2. Directivas de Exploración Sugeridas</h3>
+                <p style="color:var(--text2); margin-bottom:16px; font-size:13px;">
+                    Estas directivas pueden inyectarse durante el piloto desde la sección Wizard of Oz.
+                    Selecciona un tipo de investigación arriba para ver las sugeridas.
+                </p>
+                <div id="directive-library-list">
+                    <p style="color:var(--text3); font-size:0.85rem;">Selecciona un tipo para ver las directivas disponibles.</p>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -349,11 +445,14 @@ function showSection(name) {
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById('sec-' + name).classList.add('active');
     event.target.classList.add('active');
+    // Detener polling al salir del Wizard
+    clearInterval(window._convPollInterval);
     if (name === 'overview') loadOverview();
     if (name === 'projects') loadProjects();
     if (name === 'participants') { loadProjectSelectors(); loadParticipants(); }
     if (name === 'wizard') loadWozParticipants();
     if (name === 'export') loadProjectSelectors();
+    // design: el facilitador completa el form — no hay carga automática
 }
 
 function toast(msg) {
@@ -412,6 +511,7 @@ async function createProject() {
     const payload = {
         name: document.getElementById('proj-name').value,
         seed_prompt: document.getElementById('proj-seed').value,
+        project_type: document.getElementById('proj-type').value,
         max_participants: parseInt(document.getElementById('proj-max').value) || 10,
         pilot_duration_days: parseInt(document.getElementById('proj-days').value) || 7,
     };
@@ -473,7 +573,7 @@ async function loadParticipants() {
     const tbody = document.getElementById('participants-table');
     tbody.innerHTML = (data.participants || []).map(p => `
         <tr>
-            <td>${p.display_name || p.participant_id.slice(0, 10)}</td>
+            <td>${p.display_name || p.participant_id.slice(0, 10)} ${inactivityBadge(p.last_activity)}</td>
             <td><span class="badge badge-${p.status}">${p.status}</span></td>
             <td>${p.turn_count || 0}</td>
             <td>${p.emotional_register || '-'}</td>
@@ -499,7 +599,7 @@ async function loadWozParticipants() {
     }
     const sel = document.getElementById('woz-participant');
     sel.innerHTML = '<option value="">-- Seleccionar --</option>' +
-        allParticipants.map(p => `<option value="${p.participant_id}" data-project="${p.project_id}">${p.display_name || p.participant_id.slice(0,10)} (${p.project_name})</option>`).join('');
+        allParticipants.map(p => `<option value="${p.participant_id}" data-project="${p.project_id}">${p.display_name || p.participant_id.slice(0,10)} (${p.project_name}) ${inactivityLabel(p.last_activity)}</option>`).join('');
 }
 
 function openWoz(participantId) {
@@ -508,21 +608,97 @@ function openWoz(participantId) {
     loadConversation();
 }
 
-async function loadConversation() {
-    const participantId = document.getElementById('woz-participant').value;
+// ---- Polling helpers ----
+function inactivityBadge(lastActivity) {
+    if (!lastActivity) return '<span class="badge" style="background:rgba(99,104,128,0.2);color:var(--text3)">Sin actividad</span>';
+    const diffMin = (Date.now() - new Date(lastActivity).getTime()) / 60000;
+    if (diffMin > 60) return '<span class="badge" style="background:rgba(239,68,68,0.15);color:#ef4444">⚠ +60 min sin respuesta</span>';
+    if (diffMin > 30) return '<span class="badge" style="background:rgba(255,209,102,0.15);color:#ffd166">⏳ +30 min</span>';
+    return '<span class="badge badge-active">Activo</span>';
+}
+function inactivityLabel(lastActivity) {
+    if (!lastActivity) return '';
+    const diffMin = (Date.now() - new Date(lastActivity).getTime()) / 60000;
+    if (diffMin > 60) return '⚠ +60min';
+    if (diffMin > 30) return '⏳ +30min';
+    return '';
+}
+
+function startConversationPolling(participantId) {
+    clearInterval(window._convPollInterval);
     if (!participantId) return;
+    window._convPollInterval = setInterval(async () => {
+        const sel = document.getElementById('woz-participant');
+        if (!sel || sel.value !== participantId) {
+            clearInterval(window._convPollInterval);
+            return;
+        }
+        await loadConversation();
+    }, 10000);
+}
+
+async function checkSafeHarbor(participantId) {
+    try {
+        const data = await api(`/admin/conversation/${participantId}`);
+        const turns = data.turns || [];
+        const lastTurn = turns[turns.length - 1] || {};
+        const emotion = (lastTurn.emotional_register || '').toUpperCase();
+        const isSafeHarbor = ['DISTRESSED', 'CRISIS', 'DISTRESS'].includes(emotion) || data.safe_harbor_active;
+        const alertBanner = document.getElementById('safe-harbor-alert');
+        if (alertBanner) alertBanner.style.display = isSafeHarbor ? 'block' : 'none';
+    } catch (e) { /* silencioso */ }
+}
+
+async function loadConversation() {
+    const sel = document.getElementById('woz-participant');
+    const participantId = sel.value;
+    if (!participantId) return;
+    const option = sel.options[sel.selectedIndex];
+    const projectId = option?.dataset?.project || '';
+
     const data = await api(`/admin/conversation/${participantId}`);
     const container = document.getElementById('chat-container');
     const turns = data.turns || [];
+
     if (!turns.length) {
         container.innerHTML = '<p style="color:var(--text3); text-align:center; padding:40px;">Sin mensajes aún</p>';
-        return;
+    } else {
+        container.innerHTML = turns.map(t => `
+            <div class="msg msg-user">${t.user_text}<div class="msg-meta">${t.emotional_register || ''} • ${t.speech_act || ''}</div></div>
+            <div class="msg msg-val">${t.val_response}<div class="msg-meta">${t.directive_applied ? '🧙 Directiva aplicada' : ''} • ${new Date(t.timestamp).toLocaleTimeString()}</div></div>
+        `).join('');
+        container.scrollTop = container.scrollHeight;
     }
-    container.innerHTML = turns.map(t => `
-        <div class="msg msg-user">${t.user_text}<div class="msg-meta">${t.emotional_register || ''} • ${t.speech_act || ''}</div></div>
-        <div class="msg msg-val">${t.val_response}<div class="msg-meta">${t.directive_applied ? '🧙 Directiva aplicada' : ''} • ${new Date(t.timestamp).toLocaleTimeString()}</div></div>
-    `).join('');
-    container.scrollTop = container.scrollHeight;
+
+    // --- KPIs en tiempo real ---
+    const tcEl = document.getElementById('woz-turn-count');
+    const emEl = document.getElementById('woz-emotion');
+    if (tcEl) tcEl.textContent = turns.length;
+    if (emEl && turns.length) {
+        const lastTurn = turns[turns.length - 1];
+        const em = (lastTurn.emotional_register || '-').toUpperCase();
+        emEl.textContent = em;
+        if (['DISTRESSED', 'RESISTANT', 'CRISIS'].includes(em)) emEl.style.color = '#ef476f';
+        else if (['GUARDED'].includes(em)) emEl.style.color = '#ffd166';
+        else if (['OPEN', 'HOPE', 'CURIOSITY'].includes(em)) emEl.style.color = '#06d6a0';
+        else emEl.style.color = 'var(--text)';
+    }
+
+    // Directivas pendientes
+    if (projectId) {
+        try {
+            const dirData = await api(`/admin/directives/${projectId}`);
+            const pending = (dirData.directives || []).filter(d => d.status === 'PENDING').length;
+            const pdEl = document.getElementById('woz-pending-directives');
+            if (pdEl) pdEl.textContent = pending;
+        } catch (e) {}
+    }
+
+    // SAFE_HARBOR
+    await checkSafeHarbor(participantId);
+
+    // Iniciar/mantener polling
+    startConversationPolling(participantId);
 }
 
 async function injectDirective() {
@@ -614,6 +790,126 @@ async function setupWebhook() {
     document.getElementById('setup-result').innerHTML =
         `<span style="color: ${res.status === 'success' ? 'var(--accent)' : 'var(--danger)'}">${res.message}</span>`;
 }
+
+
+// ─── Diseño de Piloto ───────────────────────────────────────────────────────
+const SEED_TEMPLATES = {
+    CULTURA_ORGANIZACIONAL: `Eres VAL, un facilitador de investigación organizacional.
+Tu misión es explorar cómo {ORG} toma decisiones, comparte conocimiento,
+y enfrenta cambios — desde la perspectiva del participante.
+
+Ejes de exploración:
+1. Flujos de información reales (vs. los formales)
+2. Cómo se toman decisiones en la práctica cotidiana
+3. Herramientas o procesos que surgieron "por fuera" del sistema oficial
+4. Momentos de orgullo y frustración en el trabajo colaborativo
+
+Escucha más de lo que preguntas. Valida antes de explorar.
+No asumas jerarquías — pregunta desde la experiencia vivida.`,
+
+    TRANSFORMACION_DIGITAL: `Eres VAL, un facilitador de investigación sobre transformación digital.
+Exploras cómo {ORG} está viviendo el proceso de cambio tecnológico.
+
+Ejes de exploración:
+1. Adopción real de herramientas digitales (brechas entre lo declarado y lo vivido)
+2. Resistencias y miedos al cambio — ¿qué se pierde?
+3. Innovaciones que el equipo ha generado por su cuenta (Shadow IT, workarounds)
+4. ¿Qué funcionaría mejor y cómo debería cambiar?
+
+No asumas que la tecnología es neutral. Explora las implicaciones humanas.`,
+
+    INVESTIGACION_CUALITATIVA: `Eres VAL, un facilitador de investigación cualitativa.
+Tu misión es explorar [OBJETIVO] con el participante, miembro de {ORG}.
+
+Ejes de exploración:
+[Define los ejes temáticos a explorar aquí]
+
+Usa técnicas de entrevista en profundidad: paráfrasis, preguntas de contraste,
+silencios estratégicos. El participante es el experto — tú eres el aprendiz curioso.`
+};
+
+function loadSeedTemplate() {
+    const type = document.getElementById('design-type').value;
+    const org  = document.getElementById('design-org-name').value.trim() || '{ORG}';
+    if (!SEED_TEMPLATES[type]) return;
+    document.getElementById('design-seed-prompt').value =
+        SEED_TEMPLATES[type].replace(/{ORG}/g, org);
+    loadDirectiveLibrary(type);
+}
+
+function refreshSeedTemplate() {
+    const type = document.getElementById('design-type').value;
+    if (!type) return;
+    loadSeedTemplate();
+}
+
+async function loadDirectiveLibrary(type) {
+    const container = document.getElementById('directive-library-list');
+    container.innerHTML = '<p style="color:var(--text3);font-size:0.85rem">Cargando...</p>';
+    try {
+        const res  = await fetch('/static/directive_library.json');
+        const data = await res.json();
+        const items = (data.directives || {})[type] || [];
+        if (!items.length) {
+            container.innerHTML = '<p style="color:var(--text3);font-size:0.85rem">Sin directivas para este tipo.</p>';
+            return;
+        }
+        const urgencyColor = { HIGH: '#ef476f', MEDIUM: '#ffd166', LOW: '#06d6a0' };
+        const typeIcon = { QUESTION: '❓', REFRAME: '🔄', CHALLENGE: '⚡' };
+        container.innerHTML = items.map(d => `
+            <div style="padding:12px 14px; border:1px solid var(--border); border-radius:8px;
+                        margin-bottom:8px; background:var(--surface1);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span style="font-weight:600; font-size:0.9rem;">${typeIcon[d.type] || '•'} ${d.theme}</span>
+                    <div style="display:flex; gap:6px;">
+                        <span class="badge" style="background:rgba(99,104,128,0.2);color:var(--text2)">${d.type}</span>
+                        <span class="badge" style="background:rgba(99,104,128,0.15);color:${urgencyColor[d.urgency] || 'var(--text2)'}">${d.urgency}</span>
+                    </div>
+                </div>
+                <div style="color:var(--text2); font-size:13px; margin-bottom:6px;">${d.content}</div>
+                ${d.suggested_wording ? `<div style="color:var(--text3); font-size:12px; font-style:italic; border-left:2px solid var(--border); padding-left:8px;">"${d.suggested_wording}"</div>` : ''}
+            </div>
+        `).join('');
+    } catch (e) {
+        container.innerHTML = `<p style="color:var(--text3);font-size:0.85rem">No se pudo cargar la biblioteca. ¿Está corriendo AGENTE-00?</p>`;
+    }
+}
+
+async function createPilotFromDesign() {
+    const name = document.getElementById('design-pilot-name').value.trim();
+    const seed = document.getElementById('design-seed-prompt').value.trim();
+    const type = document.getElementById('design-type').value;
+    if (!name) { toast('Falta el nombre del piloto'); return; }
+    if (!seed) { toast('Falta el seed prompt'); return; }
+    if (!type) { toast('Selecciona el tipo de investigación'); return; }
+    try {
+        const res = await api('/admin/create_project', {
+            method: 'POST',
+            body: JSON.stringify({ name, seed_prompt: seed, project_type: type })
+        });
+        if (res.project_id) {
+            toast(`✅ Piloto "${name}" creado — ID: ${res.project_id.slice(0,8)}...`);
+            // Limpiar form
+            document.getElementById('design-pilot-name').value = '';
+            document.getElementById('design-seed-prompt').value = '';
+            document.getElementById('design-type').value = '';
+            document.getElementById('design-org-name').value = '';
+            document.getElementById('directive-library-list').innerHTML =
+                '<p style="color:var(--text3);font-size:0.85rem">Selecciona un tipo para ver las directivas disponibles.</p>';
+        } else {
+            toast('Error al crear el piloto');
+        }
+    } catch (e) {
+        toast('Error de red — ¿está AGENTE-00 corriendo?');
+    }
+}
+
+function copySeedToClipboard() {
+    const seed = document.getElementById('design-seed-prompt').value;
+    if (!seed) { toast('No hay seed prompt para copiar'); return; }
+    navigator.clipboard.writeText(seed).then(() => toast('📋 Seed prompt copiado'));
+}
+// ─── fin Diseño de Piloto ────────────────────────────────────────────────────
 
 // Initial load
 loadOverview();
