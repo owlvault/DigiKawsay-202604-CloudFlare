@@ -62,6 +62,7 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       DATABASE_URL: postgresql://digikawsay_app:local_password_123@postgres:5432/digikawsay
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/val-sa-key.json
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
     volumes:
       - ./infra/val-sa-key.json:/secrets/val-sa-key.json:ro
     healthcheck:
@@ -82,6 +83,7 @@ services:
       WEAVIATE_URL: http://weaviate:8080
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/val-sa-key.json
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
     volumes:
       - ./infra/val-sa-key.json:/secrets/val-sa-key.json:ro
     restart: on-failure
@@ -100,6 +102,7 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       DATABASE_URL: postgresql://digikawsay_app:local_password_123@postgres:5432/digikawsay
       WEAVIATE_URL: http://weaviate:8080
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
     volumes:
       - ./infra/val-sa-key.json:/secrets/val-sa-key.json:ro
     restart: on-failure
@@ -117,6 +120,7 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/val-sa-key.json
       DATABASE_URL: postgresql://digikawsay_app:local_password_123@postgres:5432/digikawsay
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
     volumes:
       - ./infra/val-sa-key.json:/secrets/val-sa-key.json:ro
     healthcheck:
@@ -133,9 +137,32 @@ services:
       GCP_PROJECT_ID: digikawsay
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/val-sa-key.json
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
     volumes:
       - ./infra/val-sa-key.json:/secrets/val-sa-key.json:ro
     restart: on-failure
+
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/cloud-sdk:316.0.0-emulators
+    container_name: digikawsay-pubsub
+    ports:
+      - "8085:8085"
+    command: gcloud beta emulators pubsub start --project=digikawsay --host-port=0.0.0.0:8085
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pubsub-init:
+    image: python:3.11-slim
+    container_name: digikawsay-pubsub-init
+    depends_on:
+      pubsub-emulator:
+        condition: service_healthy
+    volumes:
+      - ./init_emulator.py:/app/init_emulator.py
+    command: python /app/init_emulator.py
 
 volumes:
   pgdata:

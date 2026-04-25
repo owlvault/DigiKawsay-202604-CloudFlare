@@ -33,3 +33,7 @@ Thumbs.db
 infra/val-sa-key.json
 *-sa-key.json
 *.json.bak
+
+# Cloudflare D1 Dumps (Preserve data locally)
+*d1_out*.json
+.wrangler/
