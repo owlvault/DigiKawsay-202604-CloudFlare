@@ -108,10 +108,15 @@ async function sendTelegram(token: string, chatId: number | string, text: string
 }
 
 const CONSENT_MESSAGE =
-  "Hola, soy VAL — un facilitador de investigación organizacional.\n\n" +
-  "Esta conversación es voluntaria y confidencial. Tu identidad será anonimizada " +
-  "en todos los reportes. Al enviar tu próximo mensaje confirmas tu participación.\n\n" +
-  "Cuando estés listo, cuéntame: ¿cómo está siendo para ti el trabajo en equipo últimamente?";
+  "Hola, soy VAL.\n\n" +
+  "Vamos a tener unas conversaciones cortas sobre cómo es el trabajo real en tu equipo — " +
+  "no lo que debería ser según el manual, sino cómo funciona en el día a día.\n\n" +
+  "No hay respuestas correctas. No tomo nota de quién eres — todo queda anonimizado. " +
+  "Esto toma entre 10 y 20 minutos repartidos en varios días, a tu ritmo.\n\n" +
+  "Lo que cuentes contribuye a identificar qué mejorar en el equipo, " +
+  "y los hallazgos se comparten colectivamente.\n\n" +
+  "¿Por dónde empezamos? Cuéntame de algo que haya pasado esta semana en el trabajo — " +
+  "algo que fluyó bien o algo que se trabó.";
 
 const UNKNOWN_USER_MESSAGE =
   "Para participar necesitas un enlace de invitación de tu facilitador. " +
@@ -579,12 +584,65 @@ async function computeAnalytics(projectId: string, db: D1Database) {
   const praxisDist: Record<string, number> = {};
   for (const r of praxisRows) praxisDist[r.speech_act] = Number(r.count);
 
+  const totalEmotions = Object.values(emotionDist).reduce((a, b) => a + b, 0);
+  const totalPraxis = Object.values(praxisDist).reduce((a, b) => a + b, 0);
+
+  const pct = (key: string, dist: Record<string, number>, total: number) =>
+    total > 0 ? Math.round(((dist[key] ?? 0) / total) * 100) : 0;
+
+  // Alerts based on thresholds
+  const alerts: Array<{ level: 'red' | 'orange' | 'blue'; message: string }> = [];
+
+  const distressedPct = pct('DISTRESSED', emotionDist, totalEmotions);
+  const resistantPct = pct('RESISTANT', emotionDist, totalEmotions);
+  if (distressedPct + resistantPct > 30) {
+    alerts.push({
+      level: 'red',
+      message: `${distressedPct + resistantPct}% del equipo muestra señales de resistencia o angustia. Considera priorizar escucha activa y revisar las condiciones de trabajo antes de avanzar con propuestas de cambio.`,
+    });
+  }
+
+  const catarsisPct = pct('CATARSIS', praxisDist, totalPraxis);
+  const propuestaPct = pct('PROPUESTA_ACCION', praxisDist, totalPraxis);
+  if (catarsisPct > 50 && propuestaPct < 20) {
+    alerts.push({
+      level: 'orange',
+      message: `El ${catarsisPct}% de los turnos son catárticos con solo ${propuestaPct}% de propuestas de acción. El equipo necesita desahogarse antes de co-diseñar soluciones. No apresures la fase de acción.`,
+    });
+  }
+
+  const saberesCount2 = Object.keys(saberesCount).length;
+  if (saberesCount2 >= 3) {
+    alerts.push({
+      level: 'blue',
+      message: `Se detectaron ${saberesCount2} tipos de Shadow IT. El equipo trabaja con herramientas no oficiales para compensar gaps en los sistemas formales — esto es un insumo directo para el rediseño de procesos.`,
+    });
+  }
+
+  // Auto-generated executive summary
+  const totalTurns = totalRow?.total ?? 0;
+  const activePart = (participantStats || []).filter(p => (p.turn_count ?? 0) > 0).length;
+  const totalPart = (participantStats || []).length;
+  const dominantEmotion = Object.entries(emotionDist).sort(([,a],[,b]) => b-a)[0]?.[0] ?? 'NEUTRAL';
+  const dominantPraxis = Object.entries(praxisDist).sort(([,a],[,b]) => b-a)[0]?.[0] ?? 'REFLEXION_PASIVA';
+
+  const emotionLabel: Record<string,string> = { OPEN:'abierto', GUARDED:'cauteloso', RESISTANT:'resistente', DISTRESSED:'en angustia', NEUTRAL:'neutral' };
+  const praxisLabel: Record<string,string> = { PROPUESTA_ACCION:'con propuestas de cambio concretas', CATARSIS:'catártico (quejas sin propuestas)', REFLEXION_PASIVA:'descriptivo y reflexivo' };
+
+  const executive_summary = totalTurns === 0
+    ? 'Sin datos suficientes para generar un resumen. Espera a que los participantes inicien conversaciones.'
+    : `En este piloto, ${activePart} de ${totalPart} participantes tienen conversaciones activas, con un total de ${totalTurns} turnos analizados. ` +
+      `El registro emocional dominante del equipo es ${emotionLabel[dominantEmotion] ?? dominantEmotion} (${pct(dominantEmotion, emotionDist, totalEmotions)}%), ` +
+      `y el patrón de praxis predominante es ${praxisLabel[dominantPraxis] ?? dominantPraxis} (${pct(dominantPraxis, praxisDist, totalPraxis)}%). ` +
+      (saberesCount2 > 0 ? `Se identificaron ${saberesCount2} tipo(s) de Shadow IT, indicando que el equipo ha desarrollado workarounds para compensar limitaciones del sistema formal. ` : '') +
+      (alerts.length > 0 ? `Hay ${alerts.length} alerta(s) activa(s) que requieren atención del facilitador.` : 'No hay alertas críticas activas en este momento.');
+
   return {
     project_id: project.project_id,
     project_name: project.name,
-    total_turns: totalRow?.total ?? 0,
-    active_participants: (participantStats || []).filter(p => (p.turn_count ?? 0) > 0).length,
-    total_participants: (participantStats || []).length,
+    total_turns: totalTurns,
+    active_participants: activePart,
+    total_participants: totalPart,
     emotion_distribution: emotionDist,
     praxis_distribution: praxisDist,
     top_participants: (participantStats || []).slice(0, 15),
@@ -597,6 +655,8 @@ async function computeAnalytics(projectId: string, db: D1Database) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 12),
     pending_directives: pendingRow?.pending ?? 0,
+    alerts,
+    executive_summary,
   };
 }
 
@@ -606,6 +666,39 @@ app.get('/admin/analytics/:project_id', async (c) => {
   const analytics = await computeAnalytics(projectId, c.env.DB);
   if (!analytics) return c.json({ error: "Project not found" }, 404);
   return c.json(analytics);
+});
+
+// CSV Export
+app.get('/admin/export/:project_id', async (c) => {
+  const projectId = c.req.param('project_id');
+  const project = await c.env.DB.prepare(
+    `SELECT name FROM projects WHERE project_id = ?`
+  ).bind(projectId).first<{ name: string }>();
+  if (!project) return c.json({ error: "Project not found" }, 404);
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT t.turn_number, p.display_name, t.user_text, t.val_response,
+            t.emotional_register, t.speech_act, t.timestamp
+     FROM dialogue_turns t
+     JOIN participants p ON t.participant_id = p.participant_id
+     WHERE t.project_id = ?
+     ORDER BY t.timestamp ASC`
+  ).bind(projectId).all<{ turn_number: number; display_name: string; user_text: string; val_response: string; emotional_register: string; speech_act: string; timestamp: string }>();
+
+  const escape = (s: string | null | undefined) => `"${String(s ?? '').replace(/"/g, '""')}"`;
+  const header = 'turno,participante,mensaje_usuario,respuesta_val,registro_emocional,praxis,timestamp\n';
+  const rows = results.map(r =>
+    [r.turn_number, escape(r.display_name), escape(r.user_text), escape(r.val_response),
+     r.emotional_register ?? '', r.speech_act ?? '', r.timestamp].join(',')
+  ).join('\n');
+
+  const filename = `digikawsay_${project.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.csv`;
+  return new Response(header + rows, {
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    },
+  });
 });
 
 // SSR page

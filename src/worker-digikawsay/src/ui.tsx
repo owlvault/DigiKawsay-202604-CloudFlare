@@ -270,6 +270,27 @@ function DistBar({ label, count, total, colorClass }: { label: string; count: nu
   );
 }
 
+const ALERT_STYLES: Record<string, string> = {
+  red:    'bg-red-50 border-red-300 text-red-800',
+  orange: 'bg-orange-50 border-orange-300 text-orange-800',
+  blue:   'bg-blue-50 border-blue-300 text-blue-800',
+};
+const ALERT_ICONS: Record<string, string> = { red: '🔴', orange: '🟠', blue: '🔵' };
+
+const EMOTION_INTERP: Record<string, string> = {
+  OPEN:       'Participantes receptivos y con disposición a explorar. Buen momento para profundizar con directivas.',
+  GUARDED:    'Cautela presente — el equipo evalúa antes de abrirse. Mantén ritmo de escucha sin presionar.',
+  RESISTANT:  'Resistencia activa. Investiga la causa antes de proponer cambios.',
+  DISTRESSED: 'Señales de angustia o burnout. Prioriza Safe Harbor y apoyo emocional sobre exploración.',
+  NEUTRAL:    'Tono descriptivo sin carga emocional. Puede indicar respuestas formulaicas o bajo engagement.',
+};
+
+const PRAXIS_INTERP: Record<string, string> = {
+  PROPUESTA_ACCION: 'El equipo genera ideas de mejora. Momento oportuno para co-diseño y priorización.',
+  CATARSIS:         'Predominan quejas sin propuestas. Escucha activa antes de avanzar — el desahogo es necesario.',
+  REFLEXION_PASIVA: 'El equipo observa y describe. Profundiza con preguntas situacionales para activar agencia.',
+};
+
 // ==========================================
 // View 4: Analytics
 // ==========================================
@@ -277,25 +298,39 @@ function DistBar({ label, count, total, colorClass }: { label: string; count: nu
 export const AnalyticsView: FC<{ projects: any[]; projectId: string; analytics: any }> = ({ projects, projectId, analytics }) => {
   const totalEmotions = analytics ? Object.values(analytics.emotion_distribution as Record<string, number>).reduce((a: number, b: number) => a + b, 0) : 0;
   const totalPraxis = analytics ? Object.values(analytics.praxis_distribution as Record<string, number>).reduce((a: number, b: number) => a + b, 0) : 0;
+  const dominantEmotion = analytics
+    ? Object.entries(analytics.emotion_distribution as Record<string, number>).sort(([,a],[,b]) => b-a)[0]?.[0]
+    : null;
+  const dominantPraxis = analytics
+    ? Object.entries(analytics.praxis_distribution as Record<string, number>).sort(([,a],[,b]) => b-a)[0]?.[0]
+    : null;
 
   return (
     <Layout>
       {/* Header */}
-      <div class="flex flex-wrap justify-between items-center mb-8 gap-4">
+      <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
         <div>
           <h1 class="text-4xl text-hplus-blue font-bold">Analítica del Equipo</h1>
           {analytics && <p class="text-slate-500 mt-1">{analytics.project_name}</p>}
         </div>
-        <form method="GET" action="/admin/analytics" class="flex gap-2">
-          <select name="project_id" class="p-2 border rounded text-sm bg-white shadow-sm">
-            {projects.map((p: any) => (
-              <option value={p.project_id} selected={p.project_id === projectId}>{p.name}</option>
-            ))}
-          </select>
-          <button type="submit" class="px-4 py-2 bg-hplus-blue text-white rounded text-sm shadow-sm hover:bg-blue-900 transition">
-            Ver
-          </button>
-        </form>
+        <div class="flex gap-2 items-center flex-wrap">
+          <form method="GET" action="/admin/analytics" class="flex gap-2">
+            <select name="project_id" class="p-2 border rounded text-sm bg-white shadow-sm">
+              {projects.map((p: any) => (
+                <option value={p.project_id} selected={p.project_id === projectId}>{p.name}</option>
+              ))}
+            </select>
+            <button type="submit" class="px-4 py-2 bg-hplus-blue text-white rounded text-sm shadow-sm hover:bg-blue-900 transition">
+              Ver
+            </button>
+          </form>
+          {analytics && (
+            <a href={`/admin/export/${analytics.project_id}`}
+               class="px-4 py-2 bg-green-700 text-white rounded text-sm shadow-sm hover:bg-green-800 transition font-semibold flex items-center gap-1">
+              ⬇ Exportar CSV
+            </a>
+          )}
+        </div>
       </div>
 
       {!analytics ? (
@@ -304,6 +339,24 @@ export const AnalyticsView: FC<{ projects: any[]; projectId: string; analytics: 
         </div>
       ) : (
         <>
+          {/* Alertas */}
+          {(analytics.alerts as Array<{ level: string; message: string }>).length > 0 && (
+            <div class="mb-6 space-y-3">
+              {(analytics.alerts as Array<{ level: string; message: string }>).map(alert => (
+                <div class={`border rounded-xl px-5 py-4 flex gap-3 items-start text-sm font-medium ${ALERT_STYLES[alert.level] || 'bg-slate-50 border-slate-300 text-slate-700'}`}>
+                  <span class="text-base">{ALERT_ICONS[alert.level] || '⚠️'}</span>
+                  <span>{alert.message}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Resumen ejecutivo */}
+          <div class="glass-card p-5 rounded-xl border border-blue-100 bg-blue-50/40 mb-8">
+            <div class="text-xs font-bold text-hplus-blue uppercase mb-2 tracking-wide">Resumen ejecutivo</div>
+            <p class="text-slate-700 text-sm leading-relaxed">{analytics.executive_summary}</p>
+          </div>
+
           {/* KPIs */}
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {[
@@ -323,7 +376,8 @@ export const AnalyticsView: FC<{ projects: any[]; projectId: string; analytics: 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             {/* Distribución emocional */}
             <div class="glass-card p-6 rounded-xl shadow-sm">
-              <h2 class="text-lg font-bold text-hplus-blue mb-4">Registro Emocional</h2>
+              <h2 class="text-lg font-bold text-hplus-blue mb-1">Registro Emocional</h2>
+              <p class="text-xs text-slate-400 mb-4">Estado afectivo dominante en los mensajes de los participantes</p>
               {Object.entries(analytics.emotion_distribution as Record<string, number>)
                 .sort(([, a], [, b]) => b - a)
                 .map(([emotion, count]) => (
@@ -335,11 +389,17 @@ export const AnalyticsView: FC<{ projects: any[]; projectId: string; analytics: 
                   />
                 ))}
               {totalEmotions === 0 && <p class="text-slate-400 text-sm">Sin datos de emoción aún.</p>}
+              {dominantEmotion && EMOTION_INTERP[dominantEmotion] && (
+                <div class="mt-4 bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600">
+                  <strong>Interpretación:</strong> {EMOTION_INTERP[dominantEmotion]}
+                </div>
+              )}
             </div>
 
             {/* Distribución de praxis */}
             <div class="glass-card p-6 rounded-xl shadow-sm">
-              <h2 class="text-lg font-bold text-hplus-blue mb-4">Indicador de Praxis (Fals Borda)</h2>
+              <h2 class="text-lg font-bold text-hplus-blue mb-1">Indicador de Praxis (Fals Borda)</h2>
+              <p class="text-xs text-slate-400 mb-4">¿El equipo describe, se queja o propone? (clasificación IAP)</p>
               {Object.entries(analytics.praxis_distribution as Record<string, number>)
                 .sort(([, a], [, b]) => b - a)
                 .map(([praxis, count]) => (
@@ -351,6 +411,11 @@ export const AnalyticsView: FC<{ projects: any[]; projectId: string; analytics: 
                   />
                 ))}
               {totalPraxis === 0 && <p class="text-slate-400 text-sm">Sin datos de praxis aún.</p>}
+              {dominantPraxis && PRAXIS_INTERP[dominantPraxis] && (
+                <div class="mt-4 bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600">
+                  <strong>Interpretación:</strong> {PRAXIS_INTERP[dominantPraxis]}
+                </div>
+              )}
             </div>
           </div>
 
@@ -358,34 +423,44 @@ export const AnalyticsView: FC<{ projects: any[]; projectId: string; analytics: 
             {/* Shadow IT / Saberes */}
             <div class="glass-card p-6 rounded-xl shadow-sm">
               <h2 class="text-lg font-bold text-hplus-blue mb-1">Shadow IT y Saberes Tácitos</h2>
-              <p class="text-xs text-slate-400 mb-4">Herramientas no oficiales y conocimiento no documentado detectado</p>
+              <p class="text-xs text-slate-400 mb-4">Herramientas no oficiales y conocimiento no documentado detectado en el discurso</p>
               {analytics.saberes_detectados.length === 0 ? (
                 <p class="text-slate-400 text-sm">Sin saberes detectados aún.</p>
               ) : (
-                <div class="flex flex-wrap gap-2">
-                  {(analytics.saberes_detectados as Array<{ saber: string; count: number }>).map(({ saber, count }) => (
-                    <span class="px-3 py-1.5 bg-orange-50 border border-orange-200 text-orange-800 rounded-full text-sm font-medium">
-                      {saber} <span class="ml-1 text-orange-400 font-mono text-xs">×{count}</span>
-                    </span>
-                  ))}
-                </div>
+                <>
+                  <div class="flex flex-wrap gap-2 mb-3">
+                    {(analytics.saberes_detectados as Array<{ saber: string; count: number }>).map(({ saber, count }) => (
+                      <span class="px-3 py-1.5 bg-orange-50 border border-orange-200 text-orange-800 rounded-full text-sm font-medium">
+                        {saber} <span class="ml-1 text-orange-400 font-mono text-xs">×{count}</span>
+                      </span>
+                    ))}
+                  </div>
+                  <div class="bg-orange-50 border border-orange-100 rounded-lg p-3 text-xs text-orange-700">
+                    <strong>Qué hacer:</strong> Cada saber detectado es un gap entre el sistema formal y la práctica real. Son candidatos directos para rediseño de procesos o herramientas.
+                  </div>
+                </>
               )}
             </div>
 
             {/* Estructuras opresivas */}
             <div class="glass-card p-6 rounded-xl shadow-sm">
               <h2 class="text-lg font-bold text-hplus-blue mb-1">Estructuras Opresivas</h2>
-              <p class="text-xs text-slate-400 mb-4">Barreras sistémicas y obstáculos detectados en el discurso</p>
+              <p class="text-xs text-slate-400 mb-4">Barreras sistémicas y obstáculos detectados en el discurso del equipo</p>
               {analytics.oppressive_structures.length === 0 ? (
                 <p class="text-slate-400 text-sm">Sin estructuras detectadas aún.</p>
               ) : (
-                <div class="flex flex-wrap gap-2">
-                  {(analytics.oppressive_structures as Array<{ structure: string; count: number }>).map(({ structure, count }) => (
-                    <span class="px-3 py-1.5 bg-red-50 border border-red-200 text-red-800 rounded-full text-sm font-medium">
-                      {structure} <span class="ml-1 text-red-400 font-mono text-xs">×{count}</span>
-                    </span>
-                  ))}
-                </div>
+                <>
+                  <div class="flex flex-wrap gap-2 mb-3">
+                    {(analytics.oppressive_structures as Array<{ structure: string; count: number }>).map(({ structure, count }) => (
+                      <span class="px-3 py-1.5 bg-red-50 border border-red-200 text-red-800 rounded-full text-sm font-medium">
+                        {structure} <span class="ml-1 text-red-400 font-mono text-xs">×{count}</span>
+                      </span>
+                    ))}
+                  </div>
+                  <div class="bg-red-50 border border-red-100 rounded-lg p-3 text-xs text-red-700">
+                    <strong>Qué hacer:</strong> Las estructuras con mayor frecuencia son las que más pesan en la experiencia del equipo. Inclúyelas en el informe de ciclo IAP como prioridades de atención.
+                  </div>
+                </>
               )}
             </div>
           </div>
