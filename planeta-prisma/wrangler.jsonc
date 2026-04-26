@@ -1,0 +1,29 @@
+// Planeta Prisma — Cloudflare Worker (standalone, independent of DigiKawsay)
+{
+  "name": "planeta-prisma",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-04-10",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Static SPA assets — Vite build output served via Cloudflare CDN
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+
+  // Phase-2 placeholder: uncomment when AI Tutor D1 is provisioned
+  // "d1_databases": [
+  //   {
+  //     "binding": "DB",
+  //     "database_name": "planeta-prisma-d1",
+  //     "database_id": "<run: wrangler d1 create planeta-prisma-d1>"
+  //   }
+  // ],
+
+  // Environment vars (non-secret). Secrets go via: wrangler secret put <KEY>
+  "vars": {
+    "APP_VERSION": "0.1.0",
+    "APP_ENV": "production"
+  }
+}
