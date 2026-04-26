@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    background-color: #020818;
+    color: white;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Remove number input spinners */
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+}
+
+@layer utilities {
+  .text-neon-cyan  { color: #00f5ff; }
+  .text-neon-green { color: #39ff14; }
+  .text-neon-amber { color: #ffbe00; }
+  .text-neon-red   { color: #ff2d55; }
+  .bg-neon-cyan    { background-color: #00f5ff; }
+  .bg-cosmos-900   { background-color: #020818; }
+  .bg-cosmos-800   { background-color: #060d24; }
+  .bg-cosmos-700   { background-color: #0b1740; }
+}
