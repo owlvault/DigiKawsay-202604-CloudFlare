@@ -311,7 +311,7 @@ export async function designPilot(context: string, geminiKey: string): Promise<{
     model: "gemini-2.5-flash",
     apiKey: geminiKey,
     temperature: 0.7,
-    maxOutputTokens: 800,
+    maxOutputTokens: 1500,
   });
 
   const prompt = `Eres un experto facilitador de Investigación Acción Participativa (IAP) usando la plataforma DigiKawsay.
@@ -323,11 +323,14 @@ Tu tarea es ayudar a diseñar el arranque del piloto. Necesitas generar dos cosa
 2. "seedPrompt": La "Pregunta Semilla". Una pregunta abierta, poderosa y anclada en la realidad de este equipo, diseñada para desatar una reflexión profunda (Sentipensar) en su primera interacción con VAL. No debe ser una pregunta de "sí/no". Debe apuntar a descubrir tensiones, saberes tácitos o dinámicas reales.
 
 Devuelve tu respuesta ESTRICTAMENTE como un objeto JSON válido con las claves "contextualizationMessage" y "seedPrompt".
-No incluyas markdown, explicaciones adicionales ni backticks \`\`\`. SOLO JSON.`;
+No incluyas markdown, explicaciones adicionales ni backticks. SOLO JSON.`;
 
   try {
     const result = await llm.invoke([new HumanMessage(prompt)]);
     let raw = (result.content as string).trim();
+    
+    // Remove markdown code blocks if present
+    raw = raw.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```$/i, '').trim();
     
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
@@ -342,7 +345,7 @@ No incluyas markdown, explicaciones adicionales ni backticks \`\`\`. SOLO JSON.`
   } catch (err: any) {
     console.error("[designPilot]", err);
     return {
-      contextualizationMessage: "Error al generar el mensaje. Por favor intenta de nuevo.",
+      contextualizationMessage: `Error al generar el mensaje. Detalle técnico: ${err.message}`,
       seedPrompt: "¿Cómo te sientes frente a tu contexto actual de trabajo?"
     };
   }
