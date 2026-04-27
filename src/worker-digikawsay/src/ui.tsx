@@ -148,12 +148,80 @@ export const LobbyView: FC<{ webhookUrl: string, tokenOk: boolean }> = ({ webhoo
         </form>
       </div>
 
-      <div class="p-6 rounded-xl border border-slate-300 bg-white/50">
-        <h3 class="text-lg font-bold text-hplus-blue mb-2">Instrucciones:</h3>
-        <p class="text-sm mb-4">Este asistente configurará automáticamente el proyecto dentro de la base de datos distribuida D1 y ajustará el API oficial de Telegram en Cloudflare.</p>
-        <p class="text-sm">Una vez lanzado el piloto, diríjase al Tablero de Control para generar los Enlaces Mágicos de acceso.</p>
+      <div class="glass-card p-6 rounded-xl border border-slate-300 shadow-lg flex flex-col">
+        <div class="flex items-center gap-2 mb-4">
+           <span class="text-2xl">✨</span>
+           <h2 class="text-xl font-bold text-hplus-blue">Asistente de Diseño IA (IAP)</h2>
+        </div>
+        <p class="text-sm text-slate-500 mb-4">Describe brevemente al equipo y su contexto actual. El agente metodólogo generará un diseño de intervención inicial.</p>
+        
+        <textarea id="ai-context" rows="3" class="w-full p-3 mb-4 border border-slate-200 rounded focus:ring-val-orange text-sm bg-slate-50" placeholder="Ej: Equipo de Operaciones, 15 personas. Hay mucha fricción por un nuevo software de inventario que sienten que les impusieron."></textarea>
+        
+        <button id="ai-btn-generate" type="button" class="w-full bg-slate-800 text-white font-bold py-2 rounded-lg hover:bg-slate-700 transition flex justify-center items-center gap-2 mb-6 shadow-md">
+          <span>Generar Diseño de Piloto</span>
+        </button>
+
+        {/* Results Area */}
+        <div id="ai-results" class="hidden flex-col gap-4">
+           <div class="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+             <div class="flex justify-between items-start mb-2">
+               <h3 class="text-xs font-bold text-blue-800 uppercase">Mensaje de Contextualización</h3>
+               <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('ai-ctx-msg').innerText); this.innerText='¡Copiado!'; setTimeout(()=>this.innerText='Copiar', 2000)" class="text-xs bg-white text-blue-600 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100">Copiar</button>
+             </div>
+             <p id="ai-ctx-msg" class="text-sm text-blue-900 leading-relaxed"></p>
+             <p class="text-xs text-blue-500 mt-2 italic">* Envía este texto al equipo antes de invitarlos a Telegram.</p>
+           </div>
+
+           <div class="bg-orange-50 border border-orange-200 p-4 rounded-lg">
+             <div class="flex justify-between items-start mb-2">
+               <h3 class="text-xs font-bold text-orange-800 uppercase">Pregunta Semilla (Foro)</h3>
+               <button type="button" onclick="document.querySelector('[name=seed_prompt]').value = document.getElementById('ai-seed-prompt').innerText; this.innerText='¡Aplicada!'; setTimeout(()=>this.innerText='Usar Pregunta', 2000)" class="text-xs bg-val-orange text-white px-2 py-1 rounded hover:opacity-90 shadow-sm">Usar Pregunta</button>
+             </div>
+             <p id="ai-seed-prompt" class="text-sm text-orange-900 font-semibold"></p>
+           </div>
+        </div>
       </div>
     </div>
+    
+    <script dangerouslySetInnerHTML={{__html: `
+      document.getElementById('ai-btn-generate').addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        const contextText = document.getElementById('ai-context').value;
+        const resultsDiv = document.getElementById('ai-results');
+        const ctxMsgEl = document.getElementById('ai-ctx-msg');
+        const seedPromptEl = document.getElementById('ai-seed-prompt');
+        
+        if(!contextText.trim()) {
+           alert("Por favor, describe el contexto del equipo primero.");
+           return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="animate-spin">⏳</span> Analizando...';
+        
+        try {
+          const res = await fetch('/admin/api/design_pilot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ context: contextText })
+          });
+          const data = await res.json();
+          
+          if(data.error) throw new Error(data.error);
+
+          ctxMsgEl.innerText = data.contextualizationMessage;
+          seedPromptEl.innerText = data.seedPrompt;
+          
+          resultsDiv.classList.remove('hidden');
+          resultsDiv.classList.add('flex');
+        } catch(err) {
+          alert("Error al generar diseño: " + err.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<span>Generar Diseño de Piloto</span>';
+        }
+      });
+    `}} />
   </Layout>
 );
 

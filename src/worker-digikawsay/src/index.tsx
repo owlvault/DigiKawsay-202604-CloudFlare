@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { getSignedCookie, setSignedCookie, deleteCookie } from 'hono/cookie';
-import { runAgentCycle, generateSynthesisReport } from './agent';
+import { runAgentCycle, generateSynthesisReport, designPilot } from './agent';
 import { hashPassword, verifyPassword } from './auth';
 import { LoginView, SetupAdminView, LobbyView, DashboardView, WozView, AnalyticsView, TuningView } from './ui';
 
@@ -306,6 +306,15 @@ app.post('/admin/setup_telegram', async (c) => {
 });
 
 // ── Admin: Projects ────────────────────────────────────────────────────────
+
+app.post('/admin/api/design_pilot', async (c) => {
+  const { context } = await c.req.json();
+  const geminiKey = c.env.GEMINI_API_KEY;
+  if (!geminiKey) return c.json({ error: "No Gemini Key" }, 500);
+  
+  const result = await designPilot(context, geminiKey);
+  return c.json(result);
+});
 
 app.post('/admin/create_project_web', async (c) => {
   const body = await c.req.parseBody();

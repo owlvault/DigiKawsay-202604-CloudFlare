@@ -305,3 +305,45 @@ Escribe el informe ahora (sin usar bloques delimitadores de código markdown tri
     return `# Error al generar el informe\n\nEl sistema AI devolvió un error: ${err.message}`;
   }
 }
+
+export async function designPilot(context: string, geminiKey: string): Promise<{contextualizationMessage: string, seedPrompt: string}> {
+  const llm = new ChatGoogleGenerativeAI({
+    model: "gemini-2.5-flash",
+    apiKey: geminiKey,
+    temperature: 0.7,
+    maxOutputTokens: 800,
+  });
+
+  const prompt = `Eres un experto facilitador de Investigación Acción Participativa (IAP) usando la plataforma DigiKawsay.
+Un administrador de proyecto te proporciona el siguiente contexto sobre el equipo con el que se va a ejecutar un piloto:
+"${context}"
+
+Tu tarea es ayudar a diseñar el arranque del piloto. Necesitas generar dos cosas:
+1. "contextualizationMessage": Un mensaje empático, claro y breve (max 3 párrafos) que el administrador pueda enviar por WhatsApp o correo al equipo ANTES de iniciar, explicando el propósito de la investigación, el valor de su participación genuina, y dando paso a que hablen con VAL (el agente facilitador en Telegram).
+2. "seedPrompt": La "Pregunta Semilla". Una pregunta abierta, poderosa y anclada en la realidad de este equipo, diseñada para desatar una reflexión profunda (Sentipensar) en su primera interacción con VAL. No debe ser una pregunta de "sí/no". Debe apuntar a descubrir tensiones, saberes tácitos o dinámicas reales.
+
+Devuelve tu respuesta ESTRICTAMENTE como un objeto JSON válido con las claves "contextualizationMessage" y "seedPrompt".
+No incluyas markdown, explicaciones adicionales ni backticks \`\`\`. SOLO JSON.`;
+
+  try {
+    const result = await llm.invoke([new HumanMessage(prompt)]);
+    let raw = (result.content as string).trim();
+    
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      raw = jsonMatch[0];
+    }
+    
+    const parsed = JSON.parse(raw);
+    return {
+      contextualizationMessage: parsed.contextualizationMessage || "Contexto no generado.",
+      seedPrompt: parsed.seedPrompt || "Pregunta semilla no generada."
+    };
+  } catch (err: any) {
+    console.error("[designPilot]", err);
+    return {
+      contextualizationMessage: "Error al generar el mensaje. Por favor intenta de nuevo.",
+      seedPrompt: "¿Cómo te sientes frente a tu contexto actual de trabajo?"
+    };
+  }
+}
