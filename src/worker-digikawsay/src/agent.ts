@@ -1,5 +1,6 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
+import { z } from "zod";
 
 const MAX_HISTORY_TURNS = 12; // últimos 6 intercambios
 
@@ -311,54 +312,31 @@ export async function designPilot(context: string, geminiKey: string): Promise<{
     model: "gemini-2.5-flash",
     apiKey: geminiKey,
     temperature: 0.7,
-    maxOutputTokens: 1500,
   });
+
+  const schema = z.object({
+    contextualizationMessage: z.string().describe("Un mensaje empático, claro y breve (max 3 párrafos) que el administrador pueda enviar por WhatsApp o correo al equipo ANTES de iniciar, explicando el propósito de la investigación, el valor de su participación genuina, y dando paso a que hablen con VAL (el agente facilitador en Telegram)."),
+    seedPrompt: z.string().describe("La 'Pregunta Semilla'. Una pregunta abierta, poderosa y anclada en la realidad de este equipo, diseñada para desatar una reflexión profunda (Sentipensar) en su primera interacción con VAL. No debe ser una pregunta de 'sí/no'. Debe apuntar a descubrir tensiones, saberes tácitos o dinámicas reales.")
+  });
+
+  const structuredLlm = llm.withStructuredOutput(schema);
 
   const prompt = `Eres un experto facilitador de Investigación Acción Participativa (IAP) usando la plataforma DigiKawsay.
 Un administrador de proyecto te proporciona el siguiente contexto sobre el equipo con el que se va a ejecutar un piloto:
 "${context}"
 
-Tu tarea es ayudar a diseñar el arranque del piloto. Necesitas generar dos cosas:
-1. Mensaje de Contextualización: Un mensaje empático, claro y breve (max 3 párrafos) que el administrador pueda enviar por WhatsApp o correo al equipo ANTES de iniciar, explicando el propósito de la investigación, el valor de su participación genuina, y dando paso a que hablen con VAL (el agente facilitador en Telegram).
-2. Pregunta Semilla: Una pregunta abierta, poderosa y anclada en la realidad de este equipo, diseñada para desatar una reflexión profunda (Sentipensar) en su primera interacción con VAL. No debe ser una pregunta de "sí/no". Debe apuntar a descubrir tensiones, saberes tácitos o dinámicas reales.
+Tu tarea es ayudar a diseñar el arranque del piloto generando el mensaje de contextualización y la pregunta semilla estrictamente respetando el esquema requerido.`;
 
-Devuelve tu respuesta EXACTAMENTE con este formato textual estricto. NO uses Markdown, no uses JSON, no uses XML. Solo usa estos separadores exactos:
-
----MENSAJE---
-(Escribe el mensaje de contextualización aquí)
----PREGUNTA---
-(Escribe la pregunta semilla aquí)`;
-
-  let raw = "";
   try {
-    const result = await llm.invoke([new HumanMessage(prompt)]);
-    raw = (result.content as string).trim();
-    
-    // Parse usando búsqueda flexible de palabras clave para ser indestructible
-    const rawUpper = raw.toUpperCase();
-    const idxPregunta = rawUpper.lastIndexOf("PREGUNTA");
-    const idxMensaje = rawUpper.indexOf("MENSAJE");
-
-    if (idxPregunta === -1 || idxMensaje === -1 || idxPregunta < idxMensaje) {
-        throw new Error("No se encontraron las secciones de MENSAJE y PREGUNTA");
-    }
-
-    let contextualizationMessage = raw.substring(idxMensaje + 7, idxPregunta).trim();
-    // Limpiar guiones o dos puntos al inicio
-    contextualizationMessage = contextualizationMessage.replace(/^[-:\s]+/, '');
-    
-    let seedPrompt = raw.substring(idxPregunta + 8).trim();
-    seedPrompt = seedPrompt.replace(/^[-:\s]+/, '');
-
-    // Limpiar posibles backticks sobrantes si el LLM rebelde usó markdown de todos modos
-    contextualizationMessage = contextualizationMessage.replace(/^```[\s\S]*?/, '').replace(/```$/, '').trim();
-    seedPrompt = seedPrompt.replace(/^```[\s\S]*?/, '').replace(/```$/, '').trim();
-
-    return { contextualizationMessage, seedPrompt };
+    const result = await structuredLlm.invoke([new HumanMessage(prompt)]);
+    return {
+      contextualizationMessage: result.contextualizationMessage || "Contexto no generado",
+      seedPrompt: result.seedPrompt || "Pregunta no generada"
+    };
   } catch (err: any) {
     console.error("[designPilot]", err);
     return {
-      contextualizationMessage: `Error al generar el mensaje.\nDetalle: ${err.message}\n\nLo que el modelo respondió fue:\n${raw.substring(0, 300)}...`,
+      contextualizationMessage: `Error catastrófico en la capa de estructuración.\nDetalle: ${err.message}`,
       seedPrompt: "¿Cómo te sientes frente a tu contexto actual de trabajo?"
     };
   }
