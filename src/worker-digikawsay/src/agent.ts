@@ -319,28 +319,34 @@ Un administrador de proyecto te proporciona el siguiente contexto sobre el equip
 "${context}"
 
 Tu tarea es ayudar a diseñar el arranque del piloto. Necesitas generar dos cosas:
-1. "contextualizationMessage": Un mensaje empático, claro y breve (max 3 párrafos) que el administrador pueda enviar por WhatsApp o correo al equipo ANTES de iniciar, explicando el propósito de la investigación, el valor de su participación genuina, y dando paso a que hablen con VAL (el agente facilitador en Telegram).
-2. "seedPrompt": La "Pregunta Semilla". Una pregunta abierta, poderosa y anclada en la realidad de este equipo, diseñada para desatar una reflexión profunda (Sentipensar) en su primera interacción con VAL. No debe ser una pregunta de "sí/no". Debe apuntar a descubrir tensiones, saberes tácitos o dinámicas reales.
+1. Mensaje de Contextualización: Un mensaje empático, claro y breve (max 3 párrafos) que el administrador pueda enviar por WhatsApp o correo al equipo ANTES de iniciar, explicando el propósito de la investigación, el valor de su participación genuina, y dando paso a que hablen con VAL (el agente facilitador en Telegram).
+2. Pregunta Semilla: Una pregunta abierta, poderosa y anclada en la realidad de este equipo, diseñada para desatar una reflexión profunda (Sentipensar) en su primera interacción con VAL. No debe ser una pregunta de "sí/no". Debe apuntar a descubrir tensiones, saberes tácitos o dinámicas reales.
 
-Devuelve tu respuesta ESTRICTAMENTE como un objeto JSON válido con las claves "contextualizationMessage" y "seedPrompt".
-No incluyas markdown, explicaciones adicionales ni backticks. SOLO JSON.`;
+Devuelve tu respuesta EXACTAMENTE usando el siguiente formato de etiquetas (no agregues JSON ni markdown extra):
+
+<mensaje>
+[Escribe el mensaje de contextualización aquí]
+</mensaje>
+
+<pregunta>
+[Escribe la pregunta semilla aquí]
+</pregunta>`;
 
   try {
     const result = await llm.invoke([new HumanMessage(prompt)]);
-    let raw = (result.content as string).trim();
+    const raw = (result.content as string).trim();
     
-    // Remove markdown code blocks if present
-    raw = raw.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```$/i, '').trim();
+    // Parsear usando Regex para extraer el contenido entre etiquetas
+    const msgMatch = raw.match(/<mensaje>([\s\S]*?)<\/mensaje>/i);
+    const questionMatch = raw.match(/<pregunta>([\s\S]*?)<\/pregunta>/i);
     
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      raw = jsonMatch[0];
+    if (!msgMatch || !questionMatch) {
+        throw new Error("El modelo no devolvió el formato esperado de etiquetas <mensaje> y <pregunta>.");
     }
-    
-    const parsed = JSON.parse(raw);
+
     return {
-      contextualizationMessage: parsed.contextualizationMessage || "Contexto no generado.",
-      seedPrompt: parsed.seedPrompt || "Pregunta semilla no generada."
+      contextualizationMessage: msgMatch[1].trim(),
+      seedPrompt: questionMatch[1].trim()
     };
   } catch (err: any) {
     console.error("[designPilot]", err);
