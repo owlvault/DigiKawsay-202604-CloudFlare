@@ -322,36 +322,41 @@ Tu tarea es ayudar a diseñar el arranque del piloto. Necesitas generar dos cosa
 1. Mensaje de Contextualización: Un mensaje empático, claro y breve (max 3 párrafos) que el administrador pueda enviar por WhatsApp o correo al equipo ANTES de iniciar, explicando el propósito de la investigación, el valor de su participación genuina, y dando paso a que hablen con VAL (el agente facilitador en Telegram).
 2. Pregunta Semilla: Una pregunta abierta, poderosa y anclada en la realidad de este equipo, diseñada para desatar una reflexión profunda (Sentipensar) en su primera interacción con VAL. No debe ser una pregunta de "sí/no". Debe apuntar a descubrir tensiones, saberes tácitos o dinámicas reales.
 
-Devuelve tu respuesta EXACTAMENTE usando el siguiente formato de etiquetas (no agregues JSON ni markdown extra):
+Devuelve tu respuesta EXACTAMENTE con este formato textual estricto. NO uses Markdown, no uses JSON, no uses XML. Solo usa estos separadores exactos:
 
-<mensaje>
-[Escribe el mensaje de contextualización aquí]
-</mensaje>
+---MENSAJE---
+(Escribe el mensaje de contextualización aquí)
+---PREGUNTA---
+(Escribe la pregunta semilla aquí)`;
 
-<pregunta>
-[Escribe la pregunta semilla aquí]
-</pregunta>`;
-
+  let raw = "";
   try {
     const result = await llm.invoke([new HumanMessage(prompt)]);
-    const raw = (result.content as string).trim();
+    raw = (result.content as string).trim();
     
-    // Parsear usando Regex para extraer el contenido entre etiquetas
-    const msgMatch = raw.match(/<mensaje>([\s\S]*?)<\/mensaje>/i);
-    const questionMatch = raw.match(/<pregunta>([\s\S]*?)<\/pregunta>/i);
-    
-    if (!msgMatch || !questionMatch) {
-        throw new Error("El modelo no devolvió el formato esperado de etiquetas <mensaje> y <pregunta>.");
+    // Parse using simple split
+    const parts = raw.split("---PREGUNTA---");
+    if (parts.length < 2) {
+        throw new Error("No se encontró el separador ---PREGUNTA---");
     }
 
-    return {
-      contextualizationMessage: msgMatch[1].trim(),
-      seedPrompt: questionMatch[1].trim()
-    };
+    const msgPart = parts[0].split("---MENSAJE---");
+    if (msgPart.length < 2) {
+        throw new Error("No se encontró el separador ---MENSAJE---");
+    }
+
+    let contextualizationMessage = msgPart[1].trim();
+    let seedPrompt = parts[1].trim();
+    
+    // Limpiar posibles backticks sobrantes si el LLM rebelde usó markdown de todos modos
+    contextualizationMessage = contextualizationMessage.replace(/^```[\s\S]*?/, '').replace(/```$/, '').trim();
+    seedPrompt = seedPrompt.replace(/^```[\s\S]*?/, '').replace(/```$/, '').trim();
+
+    return { contextualizationMessage, seedPrompt };
   } catch (err: any) {
     console.error("[designPilot]", err);
     return {
-      contextualizationMessage: `Error al generar el mensaje. Detalle técnico: ${err.message}`,
+      contextualizationMessage: `Error al generar el mensaje.\nDetalle: ${err.message}\n\nLo que el modelo respondió fue:\n${raw.substring(0, 300)}...`,
       seedPrompt: "¿Cómo te sientes frente a tu contexto actual de trabajo?"
     };
   }
