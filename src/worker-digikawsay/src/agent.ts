@@ -334,20 +334,22 @@ Devuelve tu respuesta EXACTAMENTE con este formato textual estricto. NO uses Mar
     const result = await llm.invoke([new HumanMessage(prompt)]);
     raw = (result.content as string).trim();
     
-    // Parse using simple split
-    const parts = raw.split("---PREGUNTA---");
-    if (parts.length < 2) {
-        throw new Error("No se encontró el separador ---PREGUNTA---");
+    // Parse usando búsqueda flexible de palabras clave para ser indestructible
+    const rawUpper = raw.toUpperCase();
+    const idxPregunta = rawUpper.lastIndexOf("PREGUNTA");
+    const idxMensaje = rawUpper.indexOf("MENSAJE");
+
+    if (idxPregunta === -1 || idxMensaje === -1 || idxPregunta < idxMensaje) {
+        throw new Error("No se encontraron las secciones de MENSAJE y PREGUNTA");
     }
 
-    const msgPart = parts[0].split("---MENSAJE---");
-    if (msgPart.length < 2) {
-        throw new Error("No se encontró el separador ---MENSAJE---");
-    }
-
-    let contextualizationMessage = msgPart[1].trim();
-    let seedPrompt = parts[1].trim();
+    let contextualizationMessage = raw.substring(idxMensaje + 7, idxPregunta).trim();
+    // Limpiar guiones o dos puntos al inicio
+    contextualizationMessage = contextualizationMessage.replace(/^[-:\s]+/, '');
     
+    let seedPrompt = raw.substring(idxPregunta + 8).trim();
+    seedPrompt = seedPrompt.replace(/^[-:\s]+/, '');
+
     // Limpiar posibles backticks sobrantes si el LLM rebelde usó markdown de todos modos
     contextualizationMessage = contextualizationMessage.replace(/^```[\s\S]*?/, '').replace(/```$/, '').trim();
     seedPrompt = seedPrompt.replace(/^```[\s\S]*?/, '').replace(/```$/, '').trim();
