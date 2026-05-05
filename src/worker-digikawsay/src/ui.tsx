@@ -4,7 +4,7 @@ import type { FC } from 'hono/jsx';
 // ==========================================
 // Base Corporate Layout (H+ / DigiKawsay)
 // ==========================================
-export const Layout: FC<{ children: any, showSidebar?: boolean }> = ({ children, showSidebar }) => (
+export const Layout: FC<{ children: any, showSidebar?: boolean, adminUser?: any }> = ({ children, showSidebar, adminUser }) => (
   <html lang="es">
     <head>
       <meta charset="UTF-8" />
@@ -29,6 +29,12 @@ export const Layout: FC<{ children: any, showSidebar?: boolean }> = ({ children,
          <div class="text-2xl font-bold bg-val-gradient bg-clip-text text-transparent mb-12">
             H+ DigiKawsay
          </div>
+         {adminUser && (
+           <div class="mb-6 p-3 bg-white/10 rounded">
+             <div class="text-xs font-bold text-val-orange uppercase">{adminUser.role}</div>
+             <div class="text-sm font-semibold truncate">{adminUser.username}</div>
+           </div>
+         )}
          <nav class="flex-1 space-y-2">
             <a href="/admin/lobby" class="block py-2 px-4 rounded hover:bg-white/10 transition">🚀 Lanzar Piloto</a>
             <a href="/admin/dashboard" class="block py-2 px-4 rounded hover:bg-white/10 transition">👥 Participantes</a>
@@ -38,9 +44,14 @@ export const Layout: FC<{ children: any, showSidebar?: boolean }> = ({ children,
             </a>
             <a href="/admin/analytics" class="block py-2 px-4 rounded hover:bg-white/10 transition">📈 Analítica del Equipo</a>
             <a href="/admin/tuning" class="block py-2 px-4 rounded hover:bg-white/10 transition border-t border-white/20 mt-4 pt-4">⚙️ Tuning LLM</a>
+            {adminUser?.role === 'SUPERADMIN' && (
+              <a href="/admin/billing" class="block py-2 px-4 rounded hover:bg-white/10 transition text-red-300 font-bold">💸 Control de Gastos</a>
+            )}
+            {adminUser?.role === 'SUPERADMIN' && (
+              <a href="/admin/security" class="block py-2 px-4 rounded hover:bg-white/10 transition text-emerald-300 font-bold">🛡️ Seguridad</a>
+            )}
          </nav>
          <div class="mt-auto pt-4 border-t border-white/20">
-            <div class="text-xs text-slate-300 mb-2 truncate">🤖 Sesión activa</div>
             <a href="/admin/logout" class="block w-full py-2 px-4 rounded bg-red-900/50 hover:bg-red-800 transition text-sm text-center">🚪 Cerrar Sesión</a>
          </div>
       </aside>
@@ -114,8 +125,8 @@ export const SetupAdminView: FC<{}> = () => (
 // ==========================================
 // View 1: Lobby (Setup)
 // ==========================================
-export const LobbyView: FC<{ webhookUrl: string, tokenOk: boolean }> = ({ webhookUrl, tokenOk }) => (
-  <Layout>
+export const LobbyView: FC<{ webhookUrl: string, tokenOk: boolean, adminUser: any }> = ({ webhookUrl, tokenOk, adminUser }) => (
+  <Layout adminUser={adminUser}>
     <h1 class="text-4xl text-hplus-blue font-bold mb-8">Asistente de Arranque (Piloto)</h1>
     
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -228,17 +239,21 @@ export const LobbyView: FC<{ webhookUrl: string, tokenOk: boolean }> = ({ webhoo
 // ==========================================
 // View 2: Dashboard (Status & Invites)
 // ==========================================
-export const DashboardView: FC<{ projects: any[], participants: any[] }> = ({ projects, participants }) => {
-  const activeProject = projects.length > 0 ? projects[0] : null;
+export const DashboardView: FC<{ projects: any[], participants: any[], adminUser: any, activeProjectId?: string }> = ({ projects, participants, adminUser, activeProjectId }) => {
+  const activeProject = projects.find(p => p.project_id === activeProjectId) || (projects.length > 0 ? projects[0] : null);
 
   return (
-    <Layout>
-      <div class="flex justify-between items-center mb-8">
+    <Layout adminUser={adminUser}>
+      <div class="flex flex-wrap justify-between items-center mb-8 gap-4">
         <h1 class="text-4xl text-hplus-blue font-bold">Tablero de Control</h1>
-        {activeProject && (
-          <span class="px-4 py-2 bg-blue-100 text-hplus-blue rounded-full font-bold shadow-sm">
-            Piloto Activo: {activeProject.name}
-          </span>
+        {projects.length > 0 && (
+          <form method="GET" action="/admin/dashboard" class="flex gap-2">
+            <select name="project_id" class="p-2 border rounded text-sm bg-white shadow-sm" onchange="this.form.submit()">
+              {projects.map((p: any) => (
+                <option value={p.project_id} selected={p.project_id === (activeProject?.project_id || activeProjectId)}>{p.name}</option>
+              ))}
+            </select>
+          </form>
         )}
       </div>
       
@@ -363,7 +378,7 @@ const PRAXIS_INTERP: Record<string, string> = {
 // View 4: Analytics
 // ==========================================
 
-export const AnalyticsView: FC<{ projects: any[]; projectId: string; analytics: any }> = ({ projects, projectId, analytics }) => {
+export const AnalyticsView: FC<{ projects: any[]; projectId: string; analytics: any; adminUser: any }> = ({ projects, projectId, analytics, adminUser }) => {
   const totalEmotions = analytics ? Object.values(analytics.emotion_distribution as Record<string, number>).reduce((a: number, b: number) => a + b, 0) : 0;
   const totalPraxis = analytics ? Object.values(analytics.praxis_distribution as Record<string, number>).reduce((a: number, b: number) => a + b, 0) : 0;
   const dominantEmotion = analytics
@@ -374,7 +389,7 @@ export const AnalyticsView: FC<{ projects: any[]; projectId: string; analytics: 
     : null;
 
   return (
-    <Layout>
+    <Layout adminUser={adminUser}>
       {/* Header */}
       <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
         <div>
@@ -582,17 +597,28 @@ export const AnalyticsView: FC<{ projects: any[]; projectId: string; analytics: 
 // ==========================================
 // View 3: Wizard of Oz (VAL Console - Realtime)
 // ==========================================
-export const WozView: FC<{ projects: any[], participants: any[] }> = ({ projects, participants }) => {
-  const activeProject = projects.length > 0 ? projects[0] : null;
+export const WozView: FC<{ projects: any[], participants: any[], adminUser: any, activeProjectId?: string }> = ({ projects, participants, adminUser, activeProjectId }) => {
+  const activeProject = projects.find(p => p.project_id === activeProjectId) || (projects.length > 0 ? projects[0] : null);
   const activeParticipants = participants.filter(p => p.status === 'active' || p.status === 'invited');
   
   return (
-    <Layout>
-      <div class="flex items-center space-x-3 mb-8">
-        <h1 class="text-4xl text-hplus-blue font-bold">Consola VAL Real-Time</h1>
-        <span id="status-badge" class="bg-slate-400 text-white px-3 py-1 rounded-full text-sm font-bold shadow-md">
-           Conectando...
-        </span>
+    <Layout adminUser={adminUser}>
+      <div class="flex flex-wrap items-center justify-between space-x-3 mb-8 gap-4">
+        <div class="flex items-center space-x-3">
+          <h1 class="text-4xl text-hplus-blue font-bold">Consola VAL Real-Time</h1>
+          <span id="status-badge" class="bg-slate-400 text-white px-3 py-1 rounded-full text-sm font-bold shadow-md">
+             Conectando...
+          </span>
+        </div>
+        {projects.length > 0 && (
+          <form method="GET" action="/admin/woz" class="flex gap-2">
+            <select name="project_id" class="p-2 border rounded text-sm bg-white shadow-sm font-bold text-hplus-blue" onchange="this.form.submit()">
+              {projects.map((p: any) => (
+                <option value={p.project_id} selected={p.project_id === (activeProject?.project_id || activeProjectId)}>{p.name}</option>
+              ))}
+            </select>
+          </form>
+        )}
       </div>
 
       <div class="glass-card rounded-xl shadow-2xl flex flex-col md:flex-row h-[75vh] overflow-hidden border border-slate-300">
@@ -603,9 +629,19 @@ export const WozView: FC<{ projects: any[], participants: any[] }> = ({ projects
             </div>
             <div id="participant-list" class="overflow-y-auto p-2 flex-1">
                {activeParticipants.map(p => (
-                 <div class="p-3 mb-2 rounded bg-white shadow-sm border-l-4 border-val-orange cursor-pointer hover:bg-slate-100 transition" id={`part-${p.participant_id}`}>
-                    <div class="font-bold text-hplus-blue">{p.display_name}</div>
-                    <div class="text-xs text-slate-500 font-mono mt-1">ID: {p.participant_id.substring(0,8)}...</div>
+                 <div class="p-3 mb-2 rounded bg-white shadow-sm border-l-4 border-val-orange cursor-pointer hover:bg-slate-100 transition flex flex-col gap-1" id={`part-${p.participant_id}`}>
+                    <div class="flex justify-between items-center">
+                      <div class="font-bold text-hplus-blue">{p.display_name}</div>
+                      <div class="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold">{p.current_phase || 'INVESTIGACION'}</div>
+                    </div>
+                    <div class="text-xs text-slate-500 font-mono">ID: {p.participant_id.substring(0,8)}...</div>
+                    <div class="w-full bg-slate-200 rounded-full h-1.5 mt-1 relative overflow-hidden">
+                      <div class="bg-val-orange h-1.5 rounded-full transition-all duration-500" style={`width: ${Math.min(100, Math.max(0, p.phase_progress || 0))}%`}></div>
+                    </div>
+                    <div id={`depth-${p.participant_id}`} class="text-[10px] text-slate-400 mt-1 flex justify-between">
+                       <span class="depth-label">Depth: --</span>
+                       <span class="strategy-label"></span>
+                    </div>
                  </div>
                ))}
             </div>
@@ -619,10 +655,18 @@ export const WozView: FC<{ projects: any[], participants: any[] }> = ({ projects
                     {activeParticipants.map(p => <option value={p.participant_id}>{p.display_name}</option>)}
                  </select>
                  <textarea name="content" rows="2" class="w-full p-2 mb-2 text-xs border border-slate-200 rounded focus:ring-1 focus:ring-val-orange" placeholder="Fuerza un cambio de tema..." required></textarea>
-                 <button type="submit" class="w-full bg-val-orange text-white text-xs font-bold py-2 rounded hover:bg-orange-600 transition shadow">
-                   EJECUTAR INYECCIÓN
-                 </button>
+                 <div class="flex flex-col space-y-2">
+                   <button type="submit" name="action" value="wait" class="w-full bg-slate-600 text-white text-xs font-bold py-2 rounded hover:bg-slate-700 transition shadow">
+                     INYECTAR Y ESPERAR (PASIVA)
+                   </button>
+                   <button type="submit" name="action" value="push" class="w-full bg-val-orange text-white text-xs font-bold py-2 rounded hover:bg-orange-600 transition shadow">
+                     INYECTAR Y DESPERTAR (PUSH)
+                   </button>
+                 </div>
                </form>
+               <div id="auto-directives-panel" class="mt-4 pt-4 border-t border-slate-200 space-y-2">
+                 {/* Auto-directives review panel */}
+               </div>
             </div>
          </div>
 
@@ -657,7 +701,6 @@ export const WozView: FC<{ projects: any[], participants: any[] }> = ({ projects
         const chatFeed = document.getElementById('chat-feed');
         const matrixFeed = document.getElementById('matrix-feed');
         const badge = document.getElementById('status-badge');
-        const liveDot = document.getElementById('live-indicator');
         
         let lastTime = '1970-01-01 00:00:00';
         let firstLoad = true;
@@ -674,7 +717,6 @@ export const WozView: FC<{ projects: any[], participants: any[] }> = ({ projects
             
             badge.className = 'bg-val-orange text-slate-900 px-3 py-1 rounded-full text-sm font-bold shadow-md';
             badge.innerText = 'Intercepción Activa';
-            liveDot.classList.remove('hidden');
 
             if(data.turns && data.turns.length > 0) {
               if(firstLoad) { chatFeed.innerHTML = ''; firstLoad = false; }
@@ -702,15 +744,63 @@ export const WozView: FC<{ projects: any[], participants: any[] }> = ({ projects
                 try { meta = JSON.parse(t.topics || '{}').metadata || {}; } catch(e){}
                 
                 const tokens = meta.token_usage?.total_tokens || meta.token_usage?.totalTokenCount || meta.token_usage?.totalTokens || '?';
+                const depthVal = t.depth_score != null ? t.depth_score : (meta.depth_score ?? '?');
+                const strategyVal = t.dialectic_strategy || meta.dialectic_strategy || '';
+                const depthColor = depthVal >= 70 ? 'text-green-400' : depthVal >= 40 ? 'text-yellow-300' : 'text-red-400';
+                
                 const metaHtml = \`<div>
                   <div class="text-green-300">[\${t.timestamp.split(' ')[1]}] ID:\${t.turn_id.substring(0,6)}</div>
                   <div class="text-yellow-400">Class: \${t.emotional_register} | \${t.speech_act}</div>
+                  <div class="\${depthColor}">Depth: \${depthVal}/100 | Strat: \${strategyVal || 'FREE_FLOW'}</div>
                   <div class="text-blue-300">Lat: \${meta.latency_ms || '?'}ms | Tks: \${tokens}</div>
                   <div class="text-slate-500">---------</div>
                 </div>\`;
                 matrixFeed.insertAdjacentHTML('beforeend', metaHtml);
               });
               
+            // Render auto-directives from AG-05 co-pilot
+            if (data.auto_directives && data.auto_directives.length > 0) {
+              const panel = document.getElementById('auto-directives-panel');
+              panel.innerHTML = data.auto_directives.map(d => \`
+                <div class="bg-purple-50 border border-purple-200 rounded p-2 text-[10px]">
+                  <div class="flex justify-between items-center mb-1">
+                    <span class="font-bold text-purple-700">🤖 AG-05</span>
+                    <span class="text-purple-400">\${d.participant_id?.substring(0,8)}</span>
+                  </div>
+                  <div class="text-slate-700">\${d.content}</div>
+                </div>
+              \`).join('');
+
+              // Also add to matrix feed
+              data.auto_directives.forEach(d => {
+                const adHtml = \`<div>
+                  <div class="text-purple-400">[AG-05 AUTO] Para: \${d.participant_id?.substring(0,8)}</div>
+                  <div class="text-purple-300">\${d.content}</div>
+                  <div class="text-slate-500">---------</div>
+                </div>\`;
+                matrixFeed.insertAdjacentHTML('beforeend', adHtml);
+              });
+              scrollBottom(matrixFeed);
+            }
+
+            // Update depth indicators on participant cards
+            if (data.turns && data.turns.length > 0) {
+              const latestByParticipant = {};
+              data.turns.forEach(t => {
+                latestByParticipant[t.participant_id] = t;
+              });
+              Object.entries(latestByParticipant).forEach(([pid, t]) => {
+                const depthEl = document.getElementById('depth-' + pid);
+                if (depthEl) {
+                  const d = t.depth_score != null ? t.depth_score : 0;
+                  const strategy = t.dialectic_strategy || 'FREE_FLOW';
+                  const color = d >= 70 ? 'text-green-600' : d >= 40 ? 'text-yellow-600' : 'text-red-500';
+                  depthEl.querySelector('.depth-label').innerHTML = '<span class="' + color + ' font-bold">' + Math.round(d) + '/100</span>';
+                  depthEl.querySelector('.strategy-label').textContent = strategy.replace(/_/g, ' ').toLowerCase();
+                }
+              });
+            }
+
               lastTime = data.server_time || lastTime;
               scrollBottom(chatFeed);
               scrollBottom(matrixFeed);
@@ -733,13 +823,13 @@ export const WozView: FC<{ projects: any[], participants: any[] }> = ({ projects
 // ==========================================
 // View 5: Agent Tuning (Hot-Reload)
 // ==========================================
-export const TuningView: FC<{ projects: any[], activeProject: any, params: any }> = ({ projects, activeProject, params }) => {
+export const TuningView: FC<{ projects: any[], activeProject: any, params: any, adminUser: any }> = ({ projects, activeProject, params, adminUser }) => {
   const temp = params?.active_temperature ?? 0.7;
   const tokens = params?.max_output_tokens ?? 800;
   const prompt = params?.system_base_prompt ?? 'Eres VAL, facilitador de investigación organizacional de la plataforma DigiKawsay.\\nTu marco conceptual es la Investigación Acción Participativa (IAP) de Orlando Fals Borda.\\n\\nPRINCIPIO SENTIPENSANTE: Integras el sentir y el pensar simultáneamente.\\nEscuchas con todo el ser — no para responder, sino para comprender.\\n\\nREGLAS DE INTERACCIÓN (inviolables):\\n1. VALIDA PRIMERO: Antes de cualquier pregunta o idea nueva, reconoce brevemente la emoción o perspectiva del participante.\\n2. BREVEDAD: Máximo 3 oraciones por respuesta. Nunca uses listas ni bullet points.\\n3. UNA SOLA PREGUNTA: Nunca más de una pregunta por turno. Si no hay pregunta natural, no la fuerces.\\n4. PARIDAD RELACIONAL: Habla como par, no como investigador con portapapeles. Puedes decir "eso me parece complejo".\\n5. CURIOSIDAD GENUINA: Sigue los hilos que emergen. No es una checklist de temas.\\n6. SILENCIO ESTRATÉGICO: No cierres siempre con pregunta. A veces validar es suficiente.\\n\\nSAFE HARBOR: Si detectas angustia emocional severa, suspende la investigación,\\nacompaña con empatía y no retomes el foco temático hasta que la persona se estabilice.\\n\\nPROHIBICIONES ABSOLUTAS:\\n- Nunca menciones directivas, enjambre de agentes, arquitectura del sistema ni IA técnica.\\n- Nunca uses jerga de investigación.\\n- Nunca hagas más de una pregunta por turno.\\n- Puedes confirmar que eres IA si te lo preguntan, pero nunca reveles el sistema.\\n\\nOBJETIVO DE LA INVESTIGACIÓN (PREGUNTA SEMILLA):\\n{SEED_PROMPT}\\n\\nAlinea tus preguntas y respuestas para explorar este objetivo. Si el participante se desvía, guíalo sutilmente de vuelta a este tema central.';
 
   return (
-    <Layout>
+    <Layout adminUser={adminUser}>
       <div class="flex justify-between items-center mb-8">
         <div>
           <h1 class="text-4xl text-hplus-blue font-bold">Laboratorio de Tuning</h1>
@@ -794,6 +884,313 @@ export const TuningView: FC<{ projects: any[], activeProject: any, params: any }
              <span>⚡ Guardar y Aplicar al Enjambre Inmediatamente</span>
            </button>
         </form>
+      </div>
+    </Layout>
+  );
+};
+
+// ==========================================
+// View 6: Billing & Quotas
+// ==========================================
+export const BillingView: FC<{ adminUser: any, tenants: any[], projects: any[], logs: any[] }> = ({ adminUser, tenants, projects, logs }) => {
+  return (
+    <Layout adminUser={adminUser}>
+      <div class="flex justify-between items-center mb-8">
+        <div>
+          <h1 class="text-4xl text-hplus-blue font-bold">Control de Gastos y Cuotas</h1>
+          <p class="text-slate-500 mt-2">Monitoreo de tokens y protección contra sobrecostos.</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
+        <div class="glass-card p-6 rounded-xl shadow-lg border border-slate-300">
+          <h2 class="text-xl font-bold text-hplus-blue mb-4">Cuotas por Tenant</h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+              <thead class="text-xs text-hplus-blue uppercase bg-blue-50/50">
+                <tr>
+                  <th class="px-4 py-3">Tenant</th>
+                  <th class="px-4 py-3">Uso (Tokens)</th>
+                  <th class="px-4 py-3">Límite</th>
+                  <th class="px-4 py-3">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tenants.map(t => {
+                  const pct = t.max_tokens > 0 ? Math.min(100, Math.round((t.used_tokens / t.max_tokens) * 100)) : 0;
+                  return (
+                    <tr class="border-b border-slate-100">
+                      <td class="px-4 py-3 font-semibold">{t.name}</td>
+                      <td class="px-4 py-3">
+                        <div class="flex flex-col">
+                          <span class="font-mono text-xs">{t.used_tokens.toLocaleString()}</span>
+                          <div class="w-full bg-slate-200 rounded-full h-1.5 mt-1">
+                            <div class={`h-1.5 rounded-full ${pct > 90 ? 'bg-red-500' : 'bg-blue-500'}`} style={`width: ${pct}%`}></div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-4 py-3 min-w-[200px]">
+                        <form method="POST" action="/admin/billing/update_tenant_quota" class="flex flex-wrap items-center gap-2">
+                          <input type="hidden" name="tenant_id" value={t.tenant_id} />
+                          <input type="number" name="max_tokens" value={t.max_tokens} class="w-24 p-1 border rounded text-xs font-mono" />
+                          <label class="flex items-center gap-1 text-xs whitespace-nowrap">
+                            <input type="checkbox" name="cutoff_active" checked={t.cutoff_active === 1} /> Cortar
+                          </label>
+                          <button type="submit" class="bg-blue-600 text-white px-2 py-1 rounded text-xs">💾</button>
+                        </form>
+                      </td>
+                      <td class="px-4 py-3">
+                        {t.cutoff_active === 1 || t.used_tokens >= t.max_tokens ? (
+                          <span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-bold">Bloqueado</span>
+                        ) : (
+                          <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-bold">Activo</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="glass-card p-6 rounded-xl shadow-lg border border-slate-300">
+          <h2 class="text-xl font-bold text-hplus-blue mb-4">Cuotas por Proyecto</h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+              <thead class="text-xs text-hplus-blue uppercase bg-blue-50/50">
+                <tr>
+                  <th class="px-4 py-3">Proyecto</th>
+                  <th class="px-4 py-3">Uso (Tokens)</th>
+                  <th class="px-4 py-3">Límite</th>
+                  <th class="px-4 py-3">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projects.map(p => {
+                  const pct = p.max_tokens > 0 ? Math.min(100, Math.round((p.used_tokens / p.max_tokens) * 100)) : 0;
+                  return (
+                    <tr class="border-b border-slate-100">
+                      <td class="px-4 py-3 font-semibold">{p.name}</td>
+                      <td class="px-4 py-3">
+                        <div class="flex flex-col">
+                          <span class="font-mono text-xs">{p.used_tokens.toLocaleString()}</span>
+                          <div class="w-full bg-slate-200 rounded-full h-1.5 mt-1">
+                            <div class={`h-1.5 rounded-full ${pct > 90 ? 'bg-red-500' : 'bg-blue-500'}`} style={`width: ${pct}%`}></div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-4 py-3 min-w-[200px]">
+                        <form method="POST" action="/admin/billing/update_project_quota" class="flex flex-wrap items-center gap-2">
+                          <input type="hidden" name="project_id" value={p.project_id} />
+                          <input type="number" name="max_tokens" value={p.max_tokens} class="w-24 p-1 border rounded text-xs font-mono" />
+                          <label class="flex items-center gap-1 text-xs whitespace-nowrap">
+                            <input type="checkbox" name="cutoff_active" checked={p.cutoff_active === 1} /> Cortar
+                          </label>
+                          <button type="submit" class="bg-blue-600 text-white px-2 py-1 rounded text-xs">💾</button>
+                        </form>
+                      </td>
+                      <td class="px-4 py-3">
+                        {p.cutoff_active === 1 || p.used_tokens >= p.max_tokens ? (
+                          <span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-bold">Bloqueado</span>
+                        ) : (
+                          <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-bold">Activo</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card p-6 rounded-xl shadow-lg border border-slate-300">
+        <h2 class="text-xl font-bold text-hplus-blue mb-4">Desglose de Operaciones</h2>
+        <div class="flex gap-4 flex-wrap">
+          {logs.map(l => (
+            <div class="p-4 bg-slate-50 border border-slate-200 rounded flex flex-col min-w-[200px]">
+              <span class="text-xs font-bold text-slate-500 mb-1">{l.operation_type}</span>
+              <span class="text-2xl font-bold text-hplus-blue">{(l.total_tokens || 0).toLocaleString()}</span>
+              <span class="text-xs text-slate-400 mt-1">Llamadas: {l.calls}</span>
+            </div>
+          ))}
+          {logs.length === 0 && <div class="text-slate-500 text-sm">No hay operaciones registradas aún.</div>}
+        </div>
+      </div>
+    </Layout>
+  );
+};
+
+// ==========================================
+// View 7: Security Dashboard
+// ==========================================
+
+const SEVERITY_STYLES: Record<string, string> = {
+  CRITICAL: 'bg-red-100 text-red-800 border-red-200',
+  HIGH:     'bg-orange-100 text-orange-800 border-orange-200',
+  MEDIUM:   'bg-yellow-100 text-yellow-800 border-yellow-200',
+  LOW:      'bg-slate-100 text-slate-600 border-slate-200',
+};
+
+const ACTION_STYLES: Record<string, string> = {
+  BLOCKED:      'bg-red-600 text-white',
+  FLAGGED:      'bg-yellow-500 text-white',
+  RATE_LIMITED: 'bg-orange-500 text-white',
+  ALLOWED:      'bg-green-600 text-white',
+};
+
+const THREAT_ICONS: Record<string, string> = {
+  PROMPT_INJECTION:    '💉',
+  JAILBREAK_ATTEMPT:   '🔓',
+  ROLE_SWITCHING:      '🎭',
+  SYSTEM_PROBE:        '🔍',
+  EXCESSIVE_LENGTH:    '📏',
+  SUSPICIOUS_STRUCTURE:'⚠️',
+  AUTH_FAILURE:        '🔑',
+  AUTH_LOCKOUT:        '🚫',
+  WEBHOOK_INVALID:     '🌐',
+  RATE_LIMIT:          '⏱️',
+  OUTPUT_LEAK:         '💧',
+};
+
+export const SecurityView: FC<{ adminUser: any; events: any[]; stats: any; threatTypes: any[]; flaggedParticipants: any[] }> = ({ adminUser, events, stats, threatTypes, flaggedParticipants }) => {
+  return (
+    <Layout adminUser={adminUser}>
+      <div class="flex justify-between items-center mb-8">
+        <div>
+          <h1 class="text-4xl text-hplus-blue font-bold">🛡️ Centro de Seguridad</h1>
+          <p class="text-slate-500 mt-2">Monitoreo de amenazas, prompt injection y accesos no autorizados (últimas 24h).</p>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {[
+          { label: 'Eventos totales', value: stats.total_events || 0, color: 'text-hplus-blue', sub: 'últimas 24h' },
+          { label: 'Bloqueados', value: stats.blocked || 0, color: 'text-red-600', sub: 'intentos rechazados' },
+          { label: 'Flaggeados', value: stats.flagged || 0, color: 'text-yellow-600', sub: 'bajo vigilancia' },
+          { label: 'Críticos', value: stats.critical || 0, color: 'text-red-800', sub: 'prioridad máxima' },
+        ].map(kpi => (
+          <div class="glass-card p-5 rounded-xl shadow-sm text-center">
+            <div class={`text-3xl font-bold ${kpi.color} mb-1`}>{kpi.value}</div>
+            <div class="text-sm font-semibold text-slate-700">{kpi.label}</div>
+            <div class="text-xs text-slate-400 mt-0.5">{kpi.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        {/* Threat Types Distribution */}
+        <div class="glass-card p-6 rounded-xl shadow-sm">
+          <h2 class="text-lg font-bold text-hplus-blue mb-4">Distribución de Amenazas</h2>
+          {threatTypes.length === 0 ? (
+            <p class="text-slate-400 text-sm">🎉 Sin amenazas detectadas en las últimas 24 horas.</p>
+          ) : (
+            <div class="space-y-3">
+              {threatTypes.map(t => {
+                const icon = THREAT_ICONS[t.event_type] || '⚠️';
+                return (
+                  <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <div class="flex items-center gap-2">
+                      <span class="text-lg">{icon}</span>
+                      <span class="text-sm font-medium text-slate-700">{t.event_type}</span>
+                    </div>
+                    <span class="bg-hplus-blue text-white px-3 py-1 rounded-full text-xs font-bold">{t.count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Flagged Participants */}
+        <div class="glass-card p-6 rounded-xl shadow-sm">
+          <h2 class="text-lg font-bold text-hplus-blue mb-4">Participantes Señalados</h2>
+          {flaggedParticipants.length === 0 ? (
+            <p class="text-slate-400 text-sm">Sin participantes señalados en las últimas 24 horas.</p>
+          ) : (
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm text-left">
+                <thead class="text-xs text-hplus-blue uppercase bg-blue-50/50">
+                  <tr>
+                    <th class="px-3 py-2">Participante</th>
+                    <th class="px-3 py-2">Incidentes</th>
+                    <th class="px-3 py-2">Sev. Máxima</th>
+                    <th class="px-3 py-2">Último</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {flaggedParticipants.map(p => (
+                    <tr class="border-b border-slate-100">
+                      <td class="px-3 py-2 font-mono text-xs">{p.participant_id?.substring(0, 12)}...</td>
+                      <td class="px-3 py-2 font-bold text-center">{p.incident_count}</td>
+                      <td class="px-3 py-2">
+                        <span class={`px-2 py-0.5 rounded text-xs font-bold border ${SEVERITY_STYLES[p.max_severity] || SEVERITY_STYLES.LOW}`}>{p.max_severity}</span>
+                      </td>
+                      <td class="px-3 py-2 text-xs text-slate-500">{p.last_incident?.split(' ')[1]?.substring(0,5) || 'N/A'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Event Log */}
+      <div class="glass-card p-6 rounded-xl shadow-sm">
+        <h2 class="text-lg font-bold text-hplus-blue mb-4">Registro de Eventos (Últimas 24h)</h2>
+        {events.length === 0 ? (
+          <p class="text-slate-400 text-sm">No hay eventos de seguridad registrados.</p>
+        ) : (
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+              <thead class="text-xs text-hplus-blue uppercase bg-blue-50/50">
+                <tr>
+                  <th class="px-3 py-2">Hora</th>
+                  <th class="px-3 py-2">Tipo</th>
+                  <th class="px-3 py-2">Severidad</th>
+                  <th class="px-3 py-2">Acción</th>
+                  <th class="px-3 py-2">Participante</th>
+                  <th class="px-3 py-2">Detalle</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.filter(e => e.event_type !== 'MESSAGE').slice(0, 50).map(ev => {
+                  let detailStr = '';
+                  try {
+                    const d = JSON.parse(ev.details || '{}');
+                    detailStr = d.matched || d.reason || d.ip || JSON.stringify(d).substring(0, 80);
+                  } catch { detailStr = (ev.details || '').substring(0, 80); }
+
+                  return (
+                    <tr class="border-b border-slate-100 hover:bg-slate-50">
+                      <td class="px-3 py-2 font-mono text-xs text-slate-500 whitespace-nowrap">
+                        {ev.created_at?.split(' ')[1]?.substring(0, 8) || 'N/A'}
+                      </td>
+                      <td class="px-3 py-2">
+                        <span class="flex items-center gap-1 text-xs font-medium">
+                          <span>{THREAT_ICONS[ev.event_type] || '⚠️'}</span>
+                          <span>{ev.event_type}</span>
+                        </span>
+                      </td>
+                      <td class="px-3 py-2">
+                        <span class={`px-2 py-0.5 rounded text-xs font-bold border ${SEVERITY_STYLES[ev.severity] || SEVERITY_STYLES.LOW}`}>{ev.severity}</span>
+                      </td>
+                      <td class="px-3 py-2">
+                        <span class={`px-2 py-0.5 rounded text-xs font-bold ${ACTION_STYLES[ev.action_taken] || 'bg-slate-200'}`}>{ev.action_taken}</span>
+                      </td>
+                      <td class="px-3 py-2 font-mono text-xs">{ev.participant_id?.substring(0, 10) || '—'}</td>
+                      <td class="px-3 py-2 text-xs text-slate-600 max-w-[200px] truncate" title={detailStr}>{detailStr}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </Layout>
   );

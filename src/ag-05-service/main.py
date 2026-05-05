@@ -374,6 +374,15 @@ def _heuristic_corpus_synthesis(fragments: List[FragmentInput]) -> dict:
 # ============================================================
 # Endpoints HTTP
 # ============================================================
+@http_app.post("/analyze_turn")
+async def analyze_turn(request: FragmentInput):
+    """
+    Sintetiza un único turno para Fals Borda. Retorna el payload JSON.
+    """
+    logger.info(f"Análisis en vivo HTTP para participante {request.participant_id}")
+    analysis = analyze_with_gemini(request.text, request.emotion or "", request.topics or [])
+    return analysis
+
 @http_app.post("/analyze_corpus", response_model=CorpusAnalysisResponse)
 async def analyze_corpus(request: CorpusAnalysisRequest):
     """
