@@ -1,141 +1,218 @@
-# DigiKawsay: Manual de Autenticación de Administradores (v4.1)
+# DigiKawsay: Manual de Autenticación de Administradores (v4.2)
 
-El panel de administración de DigiKawsay está protegido por un sistema de autenticación basado en cookies firmadas. Este manual cubre la configuración inicial, el login, la gestión de sesiones y las consideraciones de seguridad.
+El panel de administración de DigiKawsay está protegido por un sistema de autenticación con múltiples capas: hashing PBKDF2 de contraseñas, cookies firmadas y protección contra fuerza bruta. Este manual cubre la configuración inicial, el login, la gestión de sesiones, los roles de administrador y las consideraciones de seguridad.
 
 ---
 
-## 1. Configuración inicial (Setup)
+## 1. Modelo de roles
 
-### 1.1 Primer acceso
+DigiKawsay implementa un sistema multi-tenant con tres roles de administrador:
 
-La ruta `/admin/setup` solo está disponible cuando **no existe ningún administrador** en la base de datos. Es el punto de entrada para inicializar el sistema por primera vez.
+| Rol | Nivel de acceso |
+|---|---|
+| **SUPERADMIN** | Acceso total: todos los proyectos, todos los tenants, panel de billing, dashboard de seguridad |
+| **TENANT_ADMIN** | Todos los proyectos del tenant al que pertenece. Sin acceso a billing ni seguridad global |
+| **PILOT_ADMIN** | Solo los proyectos asignados explícitamente en la tabla `admin_projects`. Sin acceso a billing ni seguridad |
+
+El primer administrador creado siempre es SUPERADMIN y pertenece al tenant `digikawsay_global`.
+
+---
+
+## 2. Configuración inicial (Setup)
+
+### 2.1 Primer acceso
+
+La ruta `/admin/setup` solo está disponible cuando **no existe ningún administrador** en la base de datos:
 
 ```
 https://TU_WORKER.workers.dev/admin/setup
 ```
 
-Si ya existe al menos un administrador, esta ruta redirige automáticamente a `/admin/login`. No es posible crear administradores adicionales por esta vía (ver sección 5).
+Si ya existe al menos un administrador, esta ruta redirige automáticamente a `/admin/login`.
 
-### 1.2 Crear el administrador raíz
+### 2.2 Crear el administrador raíz
 
 Completa el formulario con:
-- **Nombre de usuario:** identificador único (ej. `investigador_principal`). No se permiten espacios.
-- **Contraseña:** mínimo 8 caracteres. Usa una contraseña fuerte.
+- **Nombre de usuario:** identificador único, sin espacios
+- **Contraseña:** mínimo 8 caracteres. Usa una contraseña fuerte (≥ 16 caracteres recomendado)
 
 Al enviar, el sistema:
-1. Verifica que el nombre de usuario no exista en la tabla `administrators`
-2. Calcula `SHA-256(SALT + contraseña)` donde `SALT = "digikawsay_edge_salt_v1"`
-3. Inserta el registro en `administrators` con el hash
-4. Redirige al login
+1. Verifica que el nombre de usuario no exista en `administrators`
+2. Crea el tenant `digikawsay_global` si no existe
+3. Genera un hash PBKDF2 de la contraseña (ver sección 5)
+4. Inserta el administrador con rol `SUPERADMIN` y `tenant_id = 'digikawsay_global'`
+5. Redirige al login
 
-> **Guarda tu contraseña.** No hay mecanismo de recuperación automática. Si la olvidas, debes resetearla manualmente (ver sección 6).
+> **Guarda tu contraseña.** No hay mecanismo de recuperación automática. Si la olvidas, debes resetearla manualmente (ver sección 7).
 
 ---
 
-## 2. Login
+## 3. Login
 
 ```
 https://TU_WORKER.workers.dev/admin/login
 ```
 
-### 2.1 Proceso de autenticación
+### 3.1 Proceso de autenticación
 
 1. Ingresa tu nombre de usuario y contraseña
-2. El sistema calcula `SHA-256(SALT + contraseña_ingresada)` y lo compara con el hash almacenado en D1
-3. Si coincide, crea una **cookie firmada** (`dk_session`) con tu nombre de usuario
-4. Redirige a `/admin/lobby`
+2. El sistema verifica primero si el usuario no está bloqueado por fuerza bruta (máximo 5 intentos fallidos en 15 minutos)
+3. Si no está bloqueado, busca el administrador en D1 y verifica la contraseña:
+   - **Contraseñas nuevas (PBKDF2):** reconstruye el hash con el salt almacenado y compara
+   - **Contraseñas legacy (SHA-256):** verifica con el SALT fijo (compatibilidad hacia atrás)
+4. La comparación es siempre **timing-safe** (resistente a timing attacks)
+5. Si es válido, crea una cookie firmada `dk_session` y redirige a `/admin/lobby`
+6. Si falla, registra el intento en `security_events` y redirige a `/admin/login?error=1`
 
-Si las credenciales son incorrectas, redirige a `/admin/login?error=1` mostrando un mensaje de error.
-
-### 2.2 Cookie de sesión
+### 3.2 Cookie de sesión
 
 | Atributo | Valor |
 |---|---|
 | Nombre | `dk_session` |
-| Contenido | nombre de usuario (firmado con COOKIE_SECRET) |
+| Contenido | nombre de usuario (firmado con GEMINI_API_KEY) |
 | HttpOnly | Sí — no accesible desde JavaScript |
-| SameSite | Lax — protección CSRF básica |
-| Path | `/` |
-| Expiración | Sesión del navegador (se mantiene mientras el tab esté abierto) |
+| SameSite | **Strict** — protección CSRF fuerte |
+| Secure | **true** — solo HTTPS |
+| MaxAge | 7 días (604800 segundos) |
 
-La firma usa el secret `COOKIE_SECRET` configurado en Cloudflare. Si alguien manipula el valor de la cookie, la firma es inválida y la sesión se rechaza.
+La firma usa `GEMINI_API_KEY` como secret (fallback a `'digi_secret'` si la variable no existe, para desarrollo local). Si alguien manipula el valor de la cookie, la firma es inválida y la sesión se rechaza automáticamente.
 
 ---
 
-## 3. Middleware de protección
+## 4. Middleware de protección
 
-Todas las rutas `/admin/*` (excepto las de autenticación) verifican la cookie antes de procesar la solicitud:
+Todas las rutas `/admin/*` (excepto las de autenticación) verifican la cookie antes de procesar:
 
 ```
-Solicitud a /admin/* 
-  → ¿Es /admin/login, /admin/login_web, /admin/setup, /admin/setup_web?
+Solicitud a /admin/*
+  → ¿Es ruta de auth (/admin/login, /admin/login_web, /admin/setup, /admin/setup_web)?
       Sí → continúa sin verificar
-      No → ¿Existe cookie dk_session válida?
-               Sí → continúa
-               No → redirect a /admin/login
+      No → ¿Existen administradores en D1?
+              No → redirect a /admin/setup
+              Sí → ¿Existe cookie dk_session válida?
+                       No → redirect a /admin/login
+                       Sí → ¿Existe el usuario en D1?
+                                No → redirect a /admin/logout (sesión huérfana)
+                                Sí → inyectar adminUser en contexto → continuar
 ```
 
-Si la cookie fue modificada o el `COOKIE_SECRET` cambió, la verificación falla y la sesión se invalida.
+Rutas exclusivas por rol:
+- `/admin/billing` — solo SUPERADMIN (devuelve 403 si otro rol intenta acceder)
+- `/admin/security` — solo SUPERADMIN (redirect a `/admin/lobby` si otro rol)
 
 ---
 
-## 4. Logout
+## 5. Hashing de contraseñas (PBKDF2)
+
+### 5.1 Algoritmo actual
+
+Las contraseñas nuevas usan **PBKDF2 con salt aleatorio por contraseña**:
+
+```typescript
+// Genera una contraseña hasheada
+async function hashPassword(password: string): Promise<string> {
+  const salt = new Uint8Array(16);
+  crypto.getRandomValues(salt);
+  // PBKDF2: 100,000 iteraciones, SHA-256, 256 bits
+  const derivedBits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    keyMaterial, 256
+  );
+  return `${saltHex}:${hashHex}`;  // formato: "saltHex:hashHex"
+}
+```
+
+El hash almacenado en D1 tiene el formato `saltHex:hashHex` (64 chars + colon + 64 chars = 129 chars total).
+
+### 5.2 Compatibilidad legacy (SHA-256)
+
+Contraseñas creadas en v4.1 o anterior usan SHA-256 con salt fijo:
+```
+SHA-256("digikawsay_edge_salt_v1" + password)
+```
+
+El sistema detecta automáticamente el formato: si el hash almacenado contiene `:`, usa PBKDF2; si no, usa el verificador legacy. Los administradores legacy siguen funcionando pero se recomienda que actualicen su contraseña para migrar al formato seguro.
+
+### 5.3 Migrar una contraseña legacy
+
+La forma más sencilla es usar el endpoint de setup temporalmente (eliminar el admin y recrearlo). O bien insertar directamente con un hash calculado en Node.js:
+
+```javascript
+// Calcular hash PBKDF2 en Node.js (para insert manual en D1)
+const crypto = require('crypto');
+function hashPasswordSync(password) {
+  const salt = crypto.randomBytes(16);
+  const hash = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+  return `${salt.toString('hex')}:${hash.toString('hex')}`;
+}
+console.log(hashPasswordSync('mi_nueva_contrasena'));
+```
+
+```bash
+npx wrangler d1 execute digikawsay-d1 --remote \
+  --command "UPDATE administrators SET password_hash = 'HASH_CALCULADO' WHERE username = 'mi_usuario'"
+```
+
+---
+
+## 6. Logout
 
 ```
 https://TU_WORKER.workers.dev/admin/logout
 ```
 
-Borra la cookie `dk_session` del navegador y redirige a `/admin/login`. La sesión queda invalidada inmediatamente para ese navegador. No hay invalidación server-side (la cookie simplemente deja de existir).
+Borra la cookie `dk_session` del navegador y redirige al login. No hay invalidación server-side — la cookie simplemente deja de existir en el cliente.
 
 ---
 
-## 5. Gestión de administradores adicionales
+## 7. Gestión de administradores adicionales
 
-La versión actual soporta **múltiples administradores** en la tabla `administrators`, pero no expone un panel de gestión de usuarios. Para agregar administradores adicionales, hay dos opciones:
+La versión actual no expone un panel de gestión de usuarios en la UI. Las opciones son:
 
-### Opción A — Comando D1 directo (recomendado para equipos técnicos)
+### Opción A — Usar /admin/setup temporalmente (recomendado)
 
-Calcular el hash manualmente no es trivial (requiere el SALT exacto). La forma más segura es usar el endpoint de setup temporalmente:
-
-1. Borrar todos los administradores existentes (con backup previo):
+1. Hacer backup de los administradores existentes:
    ```bash
    npx wrangler d1 execute digikawsay-d1 --remote \
      --command "SELECT * FROM administrators"
-   # Guarda los datos antes de continuar
    ```
 2. Eliminar un administrador para habilitar /admin/setup:
    ```bash
-   # Solo si es seguro hacerlo
    npx wrangler d1 execute digikawsay-d1 --remote \
-     --command "DELETE FROM administrators WHERE username = 'user_to_replace'"
+     --command "DELETE FROM administrators WHERE username = 'admin_temporal'"
    ```
-3. Usar `/admin/setup` para crear el nuevo usuario
-4. Restaurar administradores borrados si aplica
+3. Usar `/admin/setup` para crear el nuevo usuario con PBKDF2
+4. Actualizar el rol si aplica (ver Opción B)
 
-### Opción B — Insert directo con hash precalculado
+### Opción B — Insert directo en D1
 
-Si tienes acceso al entorno de desarrollo, puedes calcular el hash:
-```javascript
-// En Node.js
-const crypto = require('crypto');
-const SALT = 'digikawsay_edge_salt_v1';
-const hash = crypto.createHash('sha256').update(SALT + 'mi_contraseña').digest('hex');
-console.log(hash);
-```
+Genera el hash desde Node.js (ver sección 5.3) y luego:
 
-Luego insertar directamente:
 ```bash
 npx wrangler d1 execute digikawsay-d1 --remote \
-  --command "INSERT INTO administrators (admin_id, username, password_hash, role) VALUES (lower(hex(randomblob(16))), 'nuevo_admin', 'HASH_CALCULADO', 'admin')"
+  --command "INSERT INTO administrators (admin_id, tenant_id, username, password_hash, role)
+             VALUES (hex(randomblob(16)), 'digikawsay_global', 'nuevo_admin', 'HASH_CALCULADO', 'TENANT_ADMIN')"
+```
+
+Para crear un PILOT_ADMIN con acceso a proyectos específicos:
+```bash
+# 1. Crear el admin
+npx wrangler d1 execute digikawsay-d1 --remote \
+  --command "INSERT INTO administrators (admin_id, tenant_id, username, password_hash, role)
+             VALUES ('admin-uuid', 'digikawsay_global', 'pilot_admin', 'HASH', 'PILOT_ADMIN')"
+
+# 2. Asignar proyectos
+npx wrangler d1 execute digikawsay-d1 --remote \
+  --command "INSERT INTO admin_projects (admin_id, project_id) VALUES ('admin-uuid', 'project-uuid')"
 ```
 
 ---
 
-## 6. Reset de contraseña
+## 8. Reset de contraseña
 
 No existe pantalla de recuperación. El proceso manual es:
 
-1. Calcular el nuevo hash (ver Opción B de la sección anterior)
+1. Calcular el nuevo hash (ver sección 5.3)
 2. Actualizar en D1:
    ```bash
    npx wrangler d1 execute digikawsay-d1 --remote \
@@ -144,22 +221,41 @@ No existe pantalla de recuperación. El proceso manual es:
 
 ---
 
-## 7. Consideraciones de seguridad
+## 9. Protección anti-fuerza-bruta
 
-### COOKIE_SECRET
-El secret que firma las cookies es crítico. Si se compromete:
-1. Generar un nuevo secret aleatorio: `openssl rand -hex 32`
-2. Actualizar en Cloudflare: `npx wrangler secret put COOKIE_SECRET`
-3. Redesplegar: `npm run deploy`
-4. Todas las sesiones activas quedan invalidadas automáticamente (las cookies antiguas fallan la verificación de firma)
+El sistema registra todos los intentos fallidos de login en `security_events` con `event_type = 'AUTH_FAILURE'`.
 
-### Fortaleza del hash
-El sistema usa SHA-256 con un salt fijo (`digikawsay_edge_salt_v1`). Esto es adecuado para un MVP de acceso restringido. Para producción a escala se recomienda migrar a `bcrypt` o `Argon2` (requiere Workers-compatible library).
+**Reglas:**
+- **5 intentos fallidos** para el mismo username en **15 minutos** → bloqueo temporal
+- Tras el bloqueo, todos los intentos de ese username retornan error sin procesar la contraseña
+- El bloqueo se libera automáticamente al expirar la ventana de 15 minutos
 
-### Ataques de fuerza bruta
-La versión actual no implementa rate limiting en el endpoint de login. Para mitigar ataques de fuerza bruta:
-- Usa una contraseña larga (≥ 16 caracteres, aleatoria)
-- Considera activar Cloudflare Rate Limiting en la ruta `/admin/login_web` desde el dashboard de Cloudflare (sin cambios de código)
+**Logs generados:**
+- `AUTH_FAILURE` (severity: MEDIUM) — credenciales incorrectas
+- `AUTH_LOCKOUT` (severity: HIGH) — intento durante bloqueo activo
+
+Estos eventos son visibles en el Dashboard de Seguridad (`/admin/security`) para SUPERADMIN.
+
+**Recomendación adicional:** Para entornos de producción, considera activar **Cloudflare Rate Limiting** en la ruta `/admin/login_web` desde el dashboard de Cloudflare (sin cambios de código). Esto añade una capa de protección a nivel de red antes de que los requests lleguen al worker.
+
+---
+
+## 10. Consideraciones de seguridad
+
+### COOKIE_SECRET / GEMINI_API_KEY como secret de firma
+
+El worker usa `GEMINI_API_KEY` como secret para firmar las cookies (con fallback a `COOKIE_SECRET` si la variable no existe, o `'digi_secret'` para desarrollo). En producción, el GEMINI_API_KEY actúa como secret implícito — si se rota la API key, **todas las sesiones activas quedan invalidadas automáticamente** (las cookies antiguas fallan la verificación de firma).
+
+Para rotar el secret de sesión sin afectar la API key:
+1. Asegurar que `COOKIE_SECRET` esté configurado como secret independiente
+2. Actualizar `src/index.tsx` para usar `c.env.COOKIE_SECRET || c.env.GEMINI_API_KEY || 'digi_secret'`
+3. Redesplegar
+
+### Fortaleza del hashing
+PBKDF2 con 100,000 iteraciones y salt aleatorio por contraseña es adecuado para producción en entornos de acceso restringido. El salt aleatorio previene ataques de tabla arco iris. La comparación timing-safe previene ataques de canal lateral.
 
 ### Acceso al panel admin
-El panel admin es acceso restringido para el equipo de investigación. No compartir credenciales con participantes del piloto. El panel expone historiales de conversación y datos de analítica.
+El panel admin expone historiales de conversación y datos de analítica sensibles. No compartir credenciales con participantes del piloto. Los PILOT_ADMIN solo deben tener acceso a los proyectos que necesitan gestionar.
+
+### Seguridad de Telegram
+El secret de webhook (`WEBHOOK_SECRET`) valida que los mensajes provienen genuinamente de Telegram y no de un actor malicioso que conoce la URL del worker. Se recomienda siempre configurarlo en producción.
