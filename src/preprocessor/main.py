@@ -2,6 +2,8 @@ import os
 import json
 import logging
 import time
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from concurrent.futures import TimeoutError
 from google.cloud import pubsub_v1
 from google import genai
@@ -186,7 +188,27 @@ def process_message(message: pubsub_v1.subscriber.message.Message):
         message.nack()
 
 
+_PORT = int(os.getenv("PORT", 8080))
+
+
+class _HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"status":"healthy","service":"preprocessor"}')
+
+    def log_message(self, format, *args):
+        pass
+
+
 def main():
+    threading.Thread(
+        target=lambda: HTTPServer(("0.0.0.0", _PORT), _HealthHandler).serve_forever(),
+        daemon=True,
+    ).start()
+    logger.info(f"Health server listening on port {_PORT}")
+
     init_gemini()
     init_weaviate()
 
