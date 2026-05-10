@@ -409,13 +409,14 @@ def health():
 # ============================================================
 def start_http_server():
     """Corre el servidor FastAPI en un thread daemon separado."""
-    uvicorn.run(http_app, host="0.0.0.0", port=8005, log_level="warning")
+    port = int(os.getenv("PORT", 8080))
+    uvicorn.run(http_app, host="0.0.0.0", port=port, log_level="warning")
 
 
 def main():
     init_gemini()
 
-    logger.info("Starting AG-05 HTTP server on port 8005...")
+    logger.info(f"Starting AG-05 HTTP server on port {os.getenv('PORT', '8080')}...")
     http_thread = threading.Thread(target=start_http_server, daemon=True)
     http_thread.start()
 
