@@ -2,6 +2,8 @@ import os
 import json
 import time
 import logging
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from concurrent.futures import TimeoutError
 from google.cloud import pubsub_v1
 from langchain_core.messages import HumanMessage, AIMessage
@@ -13,6 +15,7 @@ from psycopg_pool import ConnectionPool
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+PORT = int(os.getenv("PORT", 8080))
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "digikawsay")
 SUBSCRIPTION_NAME = os.getenv("PUBSUB_PACKET_INBOUND_SUB", "val-packet-sub")
 OUTBOUND_TOPIC = os.getenv("PUBSUB_OUTBOUND_TOPIC", "iap.channel.outbound")
@@ -355,8 +358,27 @@ def process_dialogue_packet(message: pubsub_v1.subscriber.message.Message):
         message.nack()
 
 
+class _HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"status":"healthy","service":"val-service"}')
+
+    def log_message(self, format, *args):
+        pass
+
+
+def _start_health_server():
+    HTTPServer(("0.0.0.0", PORT), _HealthHandler).serve_forever()
+
+
 def main():
     global pool, app
+
+    health_thread = threading.Thread(target=_start_health_server, daemon=True)
+    health_thread.start()
+    logger.info(f"Health server listening on port {PORT}")
 
     logger.info("Initializing VAL LLM...")
     initialize_llm()
